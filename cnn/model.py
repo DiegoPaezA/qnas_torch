@@ -70,3 +70,95 @@ class ConvBlock(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
             
         return tensor
+
+class MaxPooling(nn.Module):
+    """ Max Pooling layer """
+
+    def __init__(self, kernel, strides, channels_last=True):
+        """ Initialize MaxPooling.
+
+        Args:
+            kernel : int
+                Represents the size of the pooling window (3 means [3,3])
+            strides : int
+                Represents the stride of the pooling window (3 means [3,3])
+        """
+        super().__init__()
+        self.kernel = kernel
+        self.strides = strides
+        self.padding = 0 # 'valid' no padding
+        self.channels_last = channels_last
+
+        self.max_pool = nn.MaxPool2d(kernel_size=self.kernel, 
+                                     stride=self.strides, 
+                                     padding=self.padding)
+
+    def forward(self, inputs):
+        """ Max Pooling layer.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        # check of the image size    
+        if inputs.shape[2] >= self.kernel and inputs.shape[3] >= self.kernel:
+            tensor = self.max_pool(inputs)
+        else:
+            #print("Warning: MaxPooling layer not applied because the image size is smaller than the kernel size")
+            return inputs.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+
+        return tensor
+
+class AvgPooling(nn.Module):
+    """ Average Pooling layer """
+
+    def __init__(self, kernel, strides, channels_last=True):
+        """ Initialize AvgPooling.
+
+        Args:
+            kernel : int
+                Represents the size of the pooling window (3 means [3,3])
+            strides : int
+                Represents the stride of the pooling window (3 means [3,3])
+        """
+        super().__init__()
+        self.kernel = kernel
+        self.strides = strides
+        self.padding = 0 # 'valid' no padding
+        self.channels_last = channels_last
+
+        self.avg_pool = nn.AvgPool2d(kernel_size=self.kernel, 
+                                     stride=self.strides, 
+                                     padding=self.padding)
+
+    def forward(self, inputs):
+        """ Average Pooling layer.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        # check of the image size    
+        if inputs.shape[2] >= self.kernel and inputs.shape[3] >= self.kernel:
+            tensor = self.avg_pool(inputs)
+        else:
+            #print("Warning: AvgPooling layer not applied because the image size is smaller than the kernel size")
+            return inputs.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+
+        return tensor
