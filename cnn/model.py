@@ -7,6 +7,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+import torch.nn.functional as F
 
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
@@ -162,3 +163,63 @@ class AvgPooling(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
 
         return tensor
+    
+class FullyConnected(nn.Module):
+    def __init__(self,inputs_features, units):
+        """ Initialize FullyConnected.
+
+        Args:
+            inputs_features : int
+                Represents the number of inputs features of the layer
+            units : int
+                Represents the number of neurons in the layer
+
+        """
+        super().__init__()
+        self.inputs__features = inputs_features
+        self.units = units                
+        self.fc = nn.Linear(in_features=self.inputs__features,
+                            out_features=self.units)
+        init.kaiming_normal_(self.fc.weight, mode='fan_out', nonlinearity='relu')
+        
+    def forward(self, inputs):
+        """ FullyConnected layer.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        tensor = self.fc(inputs)
+                   
+        return tensor
+    
+class NoOp(object):
+    """ NoOp layer.
+    """
+    pass
+    
+def pad_features(tensors, channels_last=True):
+    """ Pad with zeros the channels of the tensor in *tensors* list 
+    that have the smaller number of feature maps.
+    Args:
+        tensors: list of 2 tensors to compare sizes.
+    Returns:
+        tensors with matching number of channels.
+    """
+    shapes = [list(t.shape) for t in tensors]
+    
+    channel_axis = - 1 if channels_last else 1
+    
+    if shapes[0][channel_axis] < shapes[1][channel_axis]:
+        small_ch_id, large_ch_id = (0, 1)
+    else:
+        small_ch_id, large_ch_id = (1, 0)
+    pad = (shapes[large_ch_id][channel_axis] - shapes[small_ch_id][channel_axis])
+    pad_beg = pad // 2
+    pad_end = pad - pad_beg
+        
+    tensors[small_ch_id] = F.pad(tensors[small_ch_id], 
+                                 (pad_beg, pad_end, 0, 0, 0, 0, 0, 0))
+    return tensors
