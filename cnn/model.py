@@ -72,6 +72,112 @@ class ConvBlock(nn.Module):
             
         return tensor
 
+class ResidualV1(nn.Module):
+    """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
+    def __init__(self, kernel, filters, strides, mu, epsilon, channels_last=True):
+        """ Initialize ResidualV1.
+
+        Args:
+            in_channel : int
+                Represents the number of channels in the input image (default 3 for RGB)
+            kernel : int
+                Represents the size of the convolutional window (3 means [3,3])
+            filters : int
+                Number of filters
+            strides : int
+                Represents the stride of the convolutional window (3 means [3,3])
+            mu : float
+                Mean for the batch normalization
+            epsilon : float
+                Epsilon for the batch normalization
+        """
+        super().__init__()
+        self.kernel_size = kernel
+        self.filters = filters
+        self.strides = strides
+        self.batch_norm_mu = mu
+        self.batch_norm_epsilon = epsilon
+        self.channels_last = channels_last
+        
+        self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
+                                         momentum=self.batch_norm_mu, 
+                                         eps=self.batch_norm_epsilon)
+
+    def forward(self, inputs):
+        """ Residual block with convolution op + batch normalization op + add op.
+
+        Args:
+            inputs: input tensor to the
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        print(f'inputs.shape: {inputs.shape}')            
+        tensor = self._conv_fixed_pad(inputs=inputs, kernel_size=self.kernel_size, 
+                                      filters=self.filters, strides=self.strides)
+        tensor = self.batch_norm(tensor)
+        tensor = F.relu(tensor)
+        print(f'tensor.shape Layer 1: {tensor.shape}')
+            
+        tensor = self._conv_fixed_pad(inputs=tensor, kernel_size=self.kernel_size, 
+                                      filters=self.filters, strides=1)
+        tensor = self.batch_norm(tensor)
+        
+      
+        print(f'tensor.shape Layer 2: {tensor.shape}')
+        inputs, tensor = pad_features([inputs, tensor], channels_last=False)
+        
+        print(f'inputs.shape Layer 2: {inputs.shape}')
+        print(f'tensor.shape Pad: {tensor.shape}')
+        
+        
+        tensor = tensor + inputs
+        
+        tensor = F.relu(tensor)
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+
+        return tensor
+    
+    def _conv_fixed_pad(self, inputs, kernel_size, filters, strides):
+        """ Convolution operation for residual unit wrapper. There is no bias and padding is
+            determined by *strides*. When *strides* = 1, SAME padding is applied. Otherwise,
+            the input is explicitly padded in the spatial dimensions before convolution, based
+            only on kernel size.
+
+        Args:
+            inputs: input tensor.
+            kernel_size: int representing the size of the convolution window (3 means [3, 3]).
+            filters: int representing the number of filters in the convolution.
+            strides: (int) specifies the strides of the convolution operation (1 means [1, 1]).
+
+        Returns:
+            output tensor.
+        """
+        padding = (kernel_size - 1) // 2  # Calculate "same" padding
+        if strides > 1:
+            print(f'inputs.shape 1 stride: {inputs.shape}')
+            pad = kernel_size - 1
+            pad_beg = pad // 2
+            pad_end = pad - pad_beg
+            inputs = F.pad(inputs, (pad_beg, pad_end, pad_beg, pad_end))
+            print(f'inputs.shape 2 stride: {inputs.shape}')
+            # Set padding to "valid" mode
+            padding = 0
+
+        conv = nn.Conv2d(in_channels=inputs.shape[1], out_channels=filters, 
+                              kernel_size=kernel_size, 
+                              stride=strides, 
+                              padding= padding,
+                              bias=False)
+        init.kaiming_normal_(conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+
+        return conv(inputs)
+
+
 class MaxPooling(nn.Module):
     """ Max Pooling layer """
 
@@ -216,10 +322,13 @@ def pad_features(tensors, channels_last=True):
         small_ch_id, large_ch_id = (0, 1)
     else:
         small_ch_id, large_ch_id = (1, 0)
-    pad = (shapes[large_ch_id][channel_axis] - shapes[small_ch_id][channel_axis])
+    
+    pad = shapes[large_ch_id][channel_axis] - shapes[small_ch_id][channel_axis]
     pad_beg = pad // 2
     pad_end = pad - pad_beg
+    if channels_last:
+        tensors[small_ch_id] = F.pad(tensors[small_ch_id],(pad_beg, pad_end, 0, 0, 0, 0, 0, 0))
+    else:
+        tensors[small_ch_id] = F.pad(tensors[small_ch_id], (0, 0, 0, 0,pad_beg,pad_end, 0, 0))
         
-    tensors[small_ch_id] = F.pad(tensors[small_ch_id], 
-                                 (pad_beg, pad_end, 0, 0, 0, 0, 0, 0))
     return tensors
