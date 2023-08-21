@@ -177,6 +177,47 @@ class ResidualV1(nn.Module):
 
         return conv(inputs)
 
+class ResidualV1Pr(ResidualV1):
+    """ Residual V1 block with projection shortcut """
+    def _projection(self, inputs, filters):
+        conv2d = nn.Conv2d(in_channels=inputs.size(1), out_channels=filters, 
+                           kernel_size=1, stride=1, padding=0, bias=False)
+        init.kaiming_normal_(conv2d.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        
+        return conv2d(inputs)
+
+    def forward(self, inputs):
+        """ Residual unit with 2 sub layers, using Plan A for shortcut connection.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        shortcut = self._projection(inputs, filters=self.filters)
+        shortcut = self.batch_norm(shortcut)
+
+        tensor = self._conv_fixed_pad(inputs=inputs, kernel_size=self.kernel_size,
+                                      filters=self.filters, strides=self.strides)
+        tensor = self.batch_norm(tensor)
+        tensor = F.relu(tensor)
+
+        tensor = self._conv_fixed_pad(inputs=tensor, kernel_size=self.kernel_size,
+                                      filters=self.filters, strides=1)
+        tensor = self.batch_norm(tensor)
+
+        tensor = tensor + shortcut
+        
+        tensor = F.relu(tensor)
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+
+        return tensor
 
 class MaxPooling(nn.Module):
     """ Max Pooling layer """
