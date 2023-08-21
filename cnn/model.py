@@ -373,3 +373,59 @@ def pad_features(tensors, channels_last=True):
         tensors[small_ch_id] = F.pad(tensors[small_ch_id], (0, 0, 0, 0,pad_beg,pad_end, 0, 0))
         
     return tensors
+
+class NetworkGraph(nn.Module):
+    def __init__(self, num_classes, mu=0.9, epsilon=2e-5):
+        """ Initialize NetworkGraph.
+
+        Args:
+            num_classes: int 
+                number of classes for classification model.
+            mu: float
+                batch normalization decay; default = 0.9
+            epsilon: float 
+                batch normalization epsilon; default = 2e-5.
+        Returns:
+            output logits tensor.
+        """
+        super().__init__()
+
+        self.num_classes = num_classes
+        self.mu = mu
+        self.epsilon = epsilon
+        self.layer_dict = nn.ModuleDict()
+
+    def create_functions(self, fn_dict):
+        """ Generate all possible functions from functions descriptions in *self.fn_dict*.
+
+        Args:
+            fn_dict: dict with definitions of the functions (name and parameters);
+                format --> {'fn_name': ['FNClass', {'param1': value1, 'param2': value2}]}.
+        """
+        for name, definition in fn_dict.items():
+            if definition['function'] in ['ConvBlock', 'ResidualV1', 'ResidualV1Pr']:
+                definition['params']['mu'] = self.mu
+                definition['params']['epsilon'] = self.epsilon
+            self.layer_dict[name] = globals()[definition['function']](**definition['params'])
+
+    def forward(self, net_list, inputs):
+        """ Create a PyTorch network from a list of layer names.
+
+        Args:
+            net_list: list of layer names, representing the network layers.
+            inputs: input tensor to the network.
+
+        Returns:
+            logits tensor.
+        """
+        for f in net_list:
+            if f == 'no_op':
+                continue
+            inputs = self.layer_dict[f](inputs)
+
+        num_features = inputs.shape[1] * inputs.shape[2] * inputs.shape[3]
+        tensor = torch.reshape(inputs, [-1, num_features])
+
+        logits = FullyConnected(inputs_features=num_features,units=self.num_classes)(inputs=tensor)
+
+        return logits
