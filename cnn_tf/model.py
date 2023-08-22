@@ -165,11 +165,13 @@ class ResidualV1(object):
         padding = 'SAME'
 
         if strides > 1:
+            print(f'inputs.shape 1 stride: {inputs.shape}')
             pad = kernel_size - 1
             pad_beg = pad // 2
             pad_end = pad - pad_beg
             inputs = tf.pad(inputs, [[0, 0], [pad_beg, pad_end], [pad_beg, pad_end], [0, 0]])
             padding = 'VALID'
+            print(f'inputs.shape 2 stride: {inputs.shape}')
 
         return tf.compat.v1.layers.conv2d(inputs=inputs,
                                 kernel_size=kernel_size,
@@ -426,6 +428,7 @@ class NetworkGraph(object):
 
         i = 0
         for f in net_list:
+            print(f'Layer {i}: {f}')
             if f == 'no_op':
                 continue
             elif isinstance(self.layer_dict[f], ConvBlock) or isinstance(self.layer_dict[f],
@@ -433,12 +436,12 @@ class NetworkGraph(object):
                 inputs = self.layer_dict[f](inputs=inputs, name=f'l{i}_{f}', is_train=is_train)
             else:
                 inputs = self.layer_dict[f](inputs=inputs, name=f'l{i}_{f}')
-
+            print(f'Layer {i} output shape: {inputs.shape}')
             i += 1
 
         shape = (inputs.shape[1] * inputs.shape[2] * inputs.shape[3])
         tensor = tf.reshape(inputs, [-1, shape])
-
+        print(f'FC input shape: {tensor.shape}')
         logits = FullyConnected(units=self.num_classes)(inputs=tensor, name='linear')
 
         return logits
