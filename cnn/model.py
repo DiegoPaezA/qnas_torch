@@ -12,7 +12,7 @@ import torch.nn.functional as F
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
 
-    def __init__(self,kernel, filters, strides, mu, epsilon, in_channel=3, channels_last=True):
+    def __init__(self,kernel, filters, strides, mu, epsilon, channels_last=True):
         """ Initialize ConvBlock.
 
         Args:
@@ -30,7 +30,6 @@ class ConvBlock(nn.Module):
                 Epsilon for the batch normalization
         """
         super().__init__()
-        self.in_channels = in_channel
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
@@ -40,16 +39,24 @@ class ConvBlock(nn.Module):
         self.activation = nn.ReLU()
         self.channels_last = channels_last
 
-        # PyTorch does not require specifying the activation function and initializer separately.
-        self.conv = nn.Conv2d(in_channels=self.in_channels, out_channels=self.filters, 
-                              kernel_size=self.kernel_size, 
-                              stride=self.strides, 
-                              padding=self.padding)
-        init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
         self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
                                          momentum=self.batch_norm_mu, 
                                          eps=self.batch_norm_epsilon)
-
+            
+    def _conv_2d(self, inputs):
+        """ Convolution operation wrapper.
+        Args:
+            inputs: input tensor.
+        Returns:
+            output tensor.
+        """
+        conv = nn.Conv2d(in_channels=inputs.shape[1], out_channels=self.filters, 
+                            kernel_size=self.kernel_size, 
+                            stride=self.strides, 
+                            padding= self.padding)
+        init.kaiming_normal_(conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        return conv(inputs)
+    
     def forward(self, inputs):
         """ Convolutional block with convolution op + batch normalization op.
 
@@ -61,9 +68,8 @@ class ConvBlock(nn.Module):
         """
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
-
         
-        tensor = self.conv(inputs)
+        tensor = self._conv_2d(inputs)
         tensor = self.batch_norm(tensor)
         tensor = self.activation(tensor)
         
@@ -296,6 +302,7 @@ class AvgPooling(nn.Module):
         Returns:
             output tensor.
         """
+        #print(f'inputs.shape avg: {inputs.shape}')
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
         
@@ -342,7 +349,7 @@ class FullyConnected(nn.Module):
                    
         return tensor
     
-class NoOp(object):
+class NoOp(nn.Module):
     """ NoOp layer.
     """
     pass
@@ -418,14 +425,17 @@ class NetworkGraph(nn.Module):
         Returns:
             logits tensor.
         """
+        print(f'inputs.shape: {inputs.shape}')
         for f in net_list:
+            print(f'f: {f}')
             if f == 'no_op':
                 continue
             inputs = self.layer_dict[f](inputs)
+            print(f'layer output.shape: {inputs.shape}')
 
         num_features = inputs.shape[1] * inputs.shape[2] * inputs.shape[3]
         tensor = torch.reshape(inputs, [-1, num_features])
-
+        print(f'FC input shape: {tensor.shape}')
         logits = FullyConnected(inputs_features=num_features,units=self.num_classes)(inputs=tensor)
 
         return logits
