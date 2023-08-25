@@ -1,0 +1,6 @@
+['max_pool_2_2', 'no_op', 'no_op', 'conv_5_1_64', 'no_op', 'no_op']
+['avg_pool_2_2', 'conv_1_1_128', 'avg_pool_2_2', 'conv_5_1_128', 'conv_5_1_128', 'no_op']
+['no_op', 'no_op', 'conv_1_1_64', 'no_op', 'avg_pool_2_2', 'conv_5_1_64']
+['no_op', 'avg_pool_2_2', 'max_pool_2_2', 'max_pool_2_2', 'no_op', 'max_pool_2_2']
+['no_op', 'conv_3_1_64', 'no_op', 'conv_5_1_128', 'no_op', 'no_op']
+['max_pool_2_2', 'no_op', 'avg_pool_2_2', 'max_pool_2_2', 'avg_pool_2_2', 'conv_3_1_64']
