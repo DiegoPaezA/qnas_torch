@@ -9,10 +9,7 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 
-functions_dict = {'ConvBlock': ConvBlock,
-                  'ResidualV1': ResidualV1,
-                  'ResidualV1Pr': ResidualV1Pr}
-    
+   
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
 
@@ -357,7 +354,11 @@ class NoOp(nn.Module):
     """ NoOp layer.
     """
     pass
-    
+
+functions_dict = {'ConvBlock': ConvBlock,
+                  'ResidualV1': ResidualV1,
+                  'ResidualV1Pr': ResidualV1Pr}
+ 
 def pad_features(tensors, channels_last=True):
     """ Pad with zeros the channels of the tensor in *tensors* list 
     that have the smaller number of feature maps.
