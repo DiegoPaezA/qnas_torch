@@ -43,21 +43,11 @@ class ConvBlock(nn.Module):
                             kernel_size=self.kernel_size, 
                             stride=self.strides, 
                             padding= self.padding)
-
+        init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
         self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
                                          momentum=self.batch_norm_mu, 
                                          eps=self.batch_norm_epsilon)
             
-    def _conv_2d(self, inputs):
-        """ Convolution operation wrapper.
-        Args:
-            inputs: input tensor.
-        Returns:
-            output tensor.
-        """
-        init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
-        return self.conv(inputs)
-    
     def forward(self, inputs):
         """ Convolutional block with convolution op + batch normalization op.
 
@@ -70,7 +60,7 @@ class ConvBlock(nn.Module):
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
         
-        tensor = self._conv_2d(inputs)
+        tensor = self.conv(inputs)
         tensor = self.batch_norm(tensor)
         tensor = self.activation(tensor)
         
