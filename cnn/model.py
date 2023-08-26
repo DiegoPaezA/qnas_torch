@@ -13,7 +13,7 @@ import torch.nn.functional as F
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
 
-    def __init__(self,kernel, filters, strides, mu, epsilon, channels_last=True):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=True):
         """ Initialize ConvBlock.
 
         Args:
@@ -39,6 +39,10 @@ class ConvBlock(nn.Module):
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         self.activation = nn.ReLU()
         self.channels_last = channels_last
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=self.filters, 
+                            kernel_size=self.kernel_size, 
+                            stride=self.strides, 
+                            padding= self.padding)
 
         self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
                                          momentum=self.batch_norm_mu, 
@@ -51,12 +55,8 @@ class ConvBlock(nn.Module):
         Returns:
             output tensor.
         """
-        conv = nn.Conv2d(in_channels=inputs.shape[1], out_channels=self.filters, 
-                            kernel_size=self.kernel_size, 
-                            stride=self.strides, 
-                            padding= self.padding)
-        init.kaiming_normal_(conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
-        return conv(inputs)
+        init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        return self.conv(inputs)
     
     def forward(self, inputs):
         """ Convolutional block with convolution op + batch normalization op.
@@ -81,7 +81,7 @@ class ConvBlock(nn.Module):
 
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
-    def __init__(self, kernel, filters, strides, mu, epsilon, channels_last=True):
+    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, padding=1, mu=1, epsilon=1, channels_last=True):
         """ Initialize ResidualV1.
 
         Args:
@@ -105,7 +105,12 @@ class ResidualV1(nn.Module):
         self.batch_norm_mu = mu
         self.batch_norm_epsilon = epsilon
         self.channels_last = channels_last
-        
+        conv = nn.Conv2d(in_channels=in_channel, out_channels=filters, 
+                              kernel_size=self.kernel_size, 
+                              stride=strides, 
+                              padding= padding,
+                              bias=False)
+
         self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
                                          momentum=self.batch_norm_mu, 
                                          eps=self.batch_norm_epsilon)
@@ -128,11 +133,9 @@ class ResidualV1(nn.Module):
         tensor = F.relu(tensor)
         print(f'tensor.shape Layer 1: {tensor.shape}')
             
-        tensor = self._conv_fixed_pad(inputs=tensor, kernel_size=self.kernel_size, 
-                                      filters=self.filters, strides=1)
+        tensor = self._conv_fixed_pad(inputs=tensor)
         tensor = self.batch_norm(tensor)
-        
-      
+              
         print(f'tensor.shape Layer 2: {tensor.shape}')
         inputs, tensor = pad_features([inputs, tensor], channels_last=False)
         
@@ -149,7 +152,7 @@ class ResidualV1(nn.Module):
 
         return tensor
     
-    def _conv_fixed_pad(self, inputs, kernel_size, filters, strides):
+    def _conv_fixed_pad(self, inputs):
         """ Convolution operation for residual unit wrapper. There is no bias and padding is
             determined by *strides*. When *strides* = 1, SAME padding is applied. Otherwise,
             the input is explicitly padded in the spatial dimensions before convolution, based
@@ -164,34 +167,29 @@ class ResidualV1(nn.Module):
         Returns:
             output tensor.
         """
-        padding = (kernel_size - 1) // 2  # Calculate "same" padding
-        if strides > 1:
-            print(f'inputs.shape 1 stride: {inputs.shape}')
-            pad = kernel_size - 1
-            pad_beg = pad // 2
-            pad_end = pad - pad_beg
-            inputs = F.pad(inputs, (pad_beg, pad_end, pad_beg, pad_end))
-            print(f'inputs.shape 2 stride: {inputs.shape}')
-            # Set padding to "valid" mode
-            padding = 0
+        # It seems that this code is the same as padding='same'. 
+        # TODO: Check if it is the same.
+        # padding = (kernel_size - 1) // 2  # Calculate "same" padding
+        # if strides > 1:
+        #     print(f'inputs.shape 1 stride: {inputs.shape}')
+        #     pad = kernel_size - 1
+        #     pad_beg = pad // 2
+        #     pad_end = pad - pad_beg
+        #     inputs = F.pad(inputs, (pad_beg, pad_end, pad_beg, pad_end))
+        #     print(f'inputs.shape 2 stride: {inputs.shape}')
+        #     # Set padding to "valid" mode
+        #     padding = 0
 
-        conv = nn.Conv2d(in_channels=inputs.shape[1], out_channels=filters, 
-                              kernel_size=kernel_size, 
-                              stride=strides, 
-                              padding= padding,
-                              bias=False)
-        init.kaiming_normal_(conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
 
-        return conv(inputs)
+        return self.conv(inputs)
 
 class ResidualV1Pr(ResidualV1):
     """ Residual V1 block with projection shortcut """
-    def _projection(self, inputs, filters):
-        conv2d = nn.Conv2d(in_channels=inputs.size(1), out_channels=filters, 
-                           kernel_size=1, stride=1, padding=0, bias=False)
-        init.kaiming_normal_(conv2d.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+    def _projection(self, inputs):
+        init.kaiming_normal_(self.conv2d.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
         
-        return conv2d(inputs)
+        return self.conv2d(inputs)
 
     def forward(self, inputs):
         """ Residual unit with 2 sub layers, using Plan A for shortcut connection.
@@ -229,7 +227,7 @@ class ResidualV1Pr(ResidualV1):
 class MaxPooling(nn.Module):
     """ Max Pooling layer """
 
-    def __init__(self, kernel, strides, channels_last=True):
+    def __init__(self, kernel=1, strides=1, channels_last=True):
         """ Initialize MaxPooling.
 
         Args:
@@ -275,7 +273,7 @@ class MaxPooling(nn.Module):
 class AvgPooling(nn.Module):
     """ Average Pooling layer """
 
-    def __init__(self, kernel, strides, channels_last=True):
+    def __init__(self, kernel=1, strides=1, channels_last=True):
         """ Initialize AvgPooling.
 
         Args:
@@ -320,7 +318,7 @@ class AvgPooling(nn.Module):
         return tensor
     
 class FullyConnected(nn.Module):
-    def __init__(self,inputs_features, units):
+    def __init__(self,input_features=1, units=1):
         """ Initialize FullyConnected.
 
         Args:
@@ -331,7 +329,7 @@ class FullyConnected(nn.Module):
 
         """
         super().__init__()
-        self.inputs__features = inputs_features
+        self.inputs__features = input_features
         self.units = units                
         self.fc = nn.Linear(in_features=self.inputs__features,
                             out_features=self.units)
@@ -357,7 +355,11 @@ class NoOp(nn.Module):
 
 functions_dict = {'ConvBlock': ConvBlock,
                   'ResidualV1': ResidualV1,
-                  'ResidualV1Pr': ResidualV1Pr}
+                  'ResidualV1Pr': ResidualV1Pr,
+                  'MaxPooling': MaxPooling,
+                  'AvgPooling': AvgPooling,
+                  'FullyConnected': FullyConnected,
+                  'no_op': NoOp}
  
 def pad_features(tensors, channels_last=True):
     """ Pad with zeros the channels of the tensor in *tensors* list 
@@ -387,7 +389,7 @@ def pad_features(tensors, channels_last=True):
     return tensors
 
 class NetworkGraph(nn.Module):
-    def __init__(self, num_classes, mu=0.9, epsilon=2e-5):
+    def __init__(self, num_classes, mu=0.9, epsilon=2e-5, in_channels=3):
         """ Initialize NetworkGraph.
 
         Args:
@@ -396,7 +398,8 @@ class NetworkGraph(nn.Module):
             mu: float
                 batch normalization decay; default = 0.9
             epsilon: float 
-                batch normalization epsilon; default = 2e-5.
+             
+                   batch normalization epsilon; default = 2e-5.
         Returns:
             output logits tensor.
         """
@@ -405,22 +408,35 @@ class NetworkGraph(nn.Module):
         self.num_classes = num_classes
         self.mu = mu
         self.epsilon = epsilon
-        self.layer_dict = nn.ModuleDict()
-
-    def create_functions(self, fn_dict):
+        self.in_channels = in_channels
+        #self.layer_dict = nn.ModuleDict()
+        
+    def create_functions(self, net_list, fn_dict):
         """ Generate all possible functions from functions descriptions in *self.fn_dict*.
 
         Args:
             fn_dict: dict with definitions of the functions (name and parameters);
                 format --> {'fn_name': ['FNClass', {'param1': value1, 'param2': value2}]}.
         """
-        for name, definition in fn_dict.items():
-            if definition['function'] in ['ConvBlock', 'ResidualV1', 'ResidualV1Pr']:
-                definition['params']['mu'] = self.mu
-                definition['params']['epsilon'] = self.epsilon
-            self.layer_dict[name] = globals()[definition['function']](**definition['params'])
+        in_channels = self.in_channels
+        self.layers = []
 
-    def forward(self, net_list, inputs):
+        for name in net_list:
+            parameters = fn_dict[name]
+            if parameters['function'] == 'no_op':
+                continue
+            if parameters['function'] in ['ConvBlock', 'ResidualV1', 'ResidualV1Pr']:
+                parameters['params']['mu'] = self.mu
+                parameters['params']['epsilon'] = self.epsilon
+                parameters['params']['in_channels'] = in_channels
+                in_channels = parameters['params']['filters']
+            
+            self.layers.append(functions_dict[parameters['function']](**parameters['params']))
+        self.model = nn.Sequential(*self.layers)
+        self.fc = None
+
+
+    def forward(self, inputs, debug=False):
         """ Create a PyTorch network from a list of layer names.
 
         Args:
@@ -431,16 +447,24 @@ class NetworkGraph(nn.Module):
             logits tensor.
         """
         print(f'inputs.shape: {inputs.shape}')
-        for f in net_list:
-            print(f'f: {f}')
-            if f == 'no_op':
-                continue
-            inputs = self.layer_dict[f](inputs)
+        if debug:
+            for f in self.layers:
+                print(f'f: {f}')
+                inputs = f(inputs)
+                print(f'layer output.shape: {inputs.shape}')
+        else:
+            inputs = self.model(inputs)
             print(f'layer output.shape: {inputs.shape}')
 
-        num_features = inputs.shape[1] * inputs.shape[2] * inputs.shape[3]
-        tensor = torch.reshape(inputs, [-1, num_features])
-        print(f'FC input shape: {tensor.shape}')
-        logits = FullyConnected(inputs_features=num_features,units=self.num_classes)(inputs=tensor)
+        if self.fc is None:
+            batch_size, num_features, height, width = inputs.size()
+            num_flat_features = num_features * height * width
+            self.fc = FullyConnected(input_features=num_flat_features, units=self.num_classes)  # Replace the placeholder
+
+        batch_size = inputs.size(0)
+        inputs = inputs.reshape(batch_size, -1)
+        print('FullyConnected')
+        print(f'layer output.shape: {inputs.shape}')
+        logits = self.fc(inputs)
 
         return logits
