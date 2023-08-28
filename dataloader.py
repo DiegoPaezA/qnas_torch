@@ -1,29 +1,37 @@
-from torch.utils.data import DataLoader, random_split
-from torchvision.transforms import ToTensor, Normalize, Resize, Compose, AutoAugment, AutoAugmentPolicy
-import random
 import torch
-from torchvision.datasets import CIFAR10, CIFAR100
-from time import time
+import random
 import util
+from time import time
+from torchvision.datasets import CIFAR10, CIFAR100
+from torch.utils.data import DataLoader, random_split
+from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, RandomHorizontalFlip
 
-class SimpleCustomBatch:
-    def __init__(self, data):
-        transposed_data = list(zip(*data))
-        self.inp = torch.stack(transposed_data[0], 0)
-        self.tgt = torch.tensor(transposed_data[1])
+class Preprocessor:
+    def __init__(self, info):
+        self.info = info
+        self.transform = Compose([
+            Resize((self.info.height + self.info.pad, self.info.width + self.info.pad)),
+            RandomCrop((self.info.height, self.info.width)),
+            RandomHorizontalFlip(),
+        ])
 
-    # custom memory pinning method on custom type
-    def pin_memory(self):
-        self.inp = self.inp.pin_memory()
-        self.tgt = self.tgt.pin_memory()
-        return {'pixel_values': self.inp, 'labels': self.tgt}
+    def preprocess(self, image):
+        """ Pad, resize and randomly flip a single image with shape = [H, W, C].
+
+        Args:
+            image: raw image (torch.tensor with dtype=torch.float32, values in [0, 1],
+                   and shape = [num_channels, height, width]).
+
+        Returns:
+            preprocessed image, with the same shape.
+        """
+
+        image = self.transform(image)
+        return image
 
 
-def my_collate(batch):
-    return SimpleCustomBatch(batch)
 
-
-def CIFAR10_loader(data_path, train_split=0.9, limit_data=None, batch_size=24, num_workers=2, seed=None):
+def CIFAR10_loader(data_path, train_split=0.9, limit_data=None, batch_size=24, num_workers=2, seed=None, ):
     
     info_dict = {'dataset': f'CIFAR{10}'}
     
@@ -148,7 +156,24 @@ def CIFAR100_loader(data_path, train_split=0.9, limit_data=None, batch_size=24, 
     
     return train_loader, val_loader, test_loader
 
-
+Cifar10Info = {
+  'dataset': 'CIFAR10',
+  'data_path': 'cifar10',
+  'num_classes': 10,
+  'height': 32,
+  'width': 32,
+  'channels': 3,
+  'pad': 4
+}
+Cifar100Info = {
+  'dataset': 'CIFAR100',
+  'data_path': 'cifar100',
+  'num_classes': 100,
+  'height': 32,
+  'width': 32,
+  'channels': 3,
+  'pad': 4
+}
 
 def create_loader(data_path, dataset='cifar10'):
   if dataset == 'cifar10':
