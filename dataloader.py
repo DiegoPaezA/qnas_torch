@@ -44,46 +44,70 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
   
   # Calculate mean and standard deviation from the entire dataset
   dataset = CIFAR10(data_path, download=True, transform=ToTensor())
-  mean = torch.stack([sample.mean(1).mean(1) for sample, _ in dataset]).mean(0)
-      
-  if data_aug:
-    height, width = dataset[0][0].shape[1:]
-    pad = 4
-    transform = Compose([
-      ToTensor(),
-      Resize((height + pad, width + pad)),
-      RandomCrop((height, width)),
-      RandomHorizontalFlip(),
-      Normalize(mean=mean, std=[1.0, 1.0, 1.0])  # Normalize with std=[1.0, 1.0, 1.0] to keep images in the [0, 1] range
-    ])
+  # loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
+  # mean = torch.zeros(3)
+  # std = torch.zeros(3)
+  # for images, _ in loader:
+  #     mean += torch.mean(images, dim=(0, 2, 3))
+  #     std += torch.std(images, dim=(0, 2, 3))
+  # mean /= len(loader)
+  # std /= len(loader)
+
+  # info_dict['mean'] = mean.tolist()
+  # info_dict['std'] = std.tolist()
+ 
+  mean = [0.4914, 0.4822, 0.4465]
+  std = [0.2023, 0.1994, 0.2010]
+  if for_train:
+    if data_aug:
+      height, width = dataset[0][0].shape[1:]
+      pad = 4
+      train_transform = Compose([
+        Resize((height + pad, width + pad)),
+        RandomCrop((height, width)),
+        RandomHorizontalFlip(),
+        ToTensor(),
+        Normalize(mean=mean, std=std)  # Normalize with std=std to keep images in the [0, 1] range
+      ])
+    else:
+      train_transform = Compose([
+        ToTensor(),
+        Normalize(mean=mean, std=std)
+      ])
   else:
-    transform = Compose([
-      ToTensor(),
-      Normalize(mean=mean, std=[1.0, 1.0, 1.0])
-    ])
+    # Normalize for validation and testing
+    validation_transform = Compose([
+        ToTensor(),
+        Normalize(mean=mean, std=std)])
     
-  #val_percent = 1 - train_split
-  train_dataset = CIFAR10(data_path, download=True, train=True, transform=transform)
-  test_dataset = CIFAR10(data_path, download=True, train=False, transform=transform)
-  
-  total_samples = len(train_dataset)
-  
-  if limit_data is not None and limit_data < total_samples:
-      train_size = min(int(train_split * limit_data), limit_data)
-      val_size = int(limit_data - train_size)
-      train_dataset, _ = random_split(train_dataset, [limit_data, total_samples - limit_data])
-  else:
-      train_size = int(train_split * total_samples)
-      val_size = int(total_samples - train_size)
-      
-  train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
-  
-  test_loader = DataLoader(
+    test_dataset = CIFAR10(data_path, download=True, train=False, transform=validation_transform)
+    test_loader = DataLoader(
     test_dataset,
     batch_size=batch_size,
     num_workers=num_workers,
     pin_memory=True)
+    
+  train_dataset = CIFAR10(data_path, download=True, train=True, transform=train_transform)
   
+  
+  total_samples = len(train_dataset)
+  
+  if limit_data is not None and limit_data < total_samples:
+      sample_indices = random.sample(range(total_samples), limit_data)
+      train_size = int(train_split * limit_data)
+      val_size = limit_data - train_size
+
+      train_indices = sample_indices[:train_size]
+      val_indices = sample_indices[train_size:]
+
+      train_dataset = torch.utils.data.Subset(train_dataset, train_indices)
+      val_dataset = torch.utils.data.Subset(train_dataset, val_indices)
+  else:
+      train_size = int(train_split * total_samples)
+      val_size = total_samples - train_size
+
+      train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+    
   train_loader = DataLoader(
       train_dataset,
       batch_size=batch_size,
@@ -96,14 +120,14 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
       num_workers=num_workers,
       pin_memory=True)
   
-  train_imgs, _ = next(iter(train_loader))
+  # train_imgs, _ = next(iter(train_loader))
   
-  info_dict['train_records'] = len(train_dataset)
-  info_dict['valid_records'] = len(val_dataset)
-  info_dict['test_records'] = len(test_dataset)
-  info_dict['shape'] = list(train_imgs.shape[1:])
+  # info_dict['train_records'] = len(train_dataset)
+  # info_dict['valid_records'] = len(val_dataset)
+  # info_dict['test_records'] = len(test_dataset)
+  # info_dict['shape'] = list(train_imgs.shape[1:])
   
-  util.create_info_file(out_path=data_path, info_dict=info_dict)
+  # util.create_info_file(out_path=data_path, info_dict=info_dict)
   
   if for_train:
     print("All set for training!")
