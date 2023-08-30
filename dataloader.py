@@ -3,8 +3,25 @@ import random
 import util
 from time import time
 from torchvision.datasets import CIFAR10, CIFAR100
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Dataset, Subset
 from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, RandomHorizontalFlip, Normalize
+
+class CustomCIFAR10(Dataset):
+    def __init__(self, data, targets, transform=None):
+        self.data = data
+        self.targets = targets
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        image, target = self.data[index], self.targets[index]
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image, target
 
 def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,seed=None,data_aug=True,for_train=True, num_workers=2):
   """
@@ -44,70 +61,70 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
   
   # Calculate mean and standard deviation from the entire dataset
   dataset = CIFAR10(data_path, download=True, transform=ToTensor())
-  # loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
-  # mean = torch.zeros(3)
-  # std = torch.zeros(3)
-  # for images, _ in loader:
-  #     mean += torch.mean(images, dim=(0, 2, 3))
-  #     std += torch.std(images, dim=(0, 2, 3))
-  # mean /= len(loader)
-  # std /= len(loader)
+  loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
+  mean = torch.zeros(3)
+  std = torch.zeros(3)
+  
+  for images, _ in loader:
+      mean += torch.mean(images, dim=(0, 2, 3))
+      std += torch.std(images, dim=(0, 2, 3))
+  mean /= len(loader)
+  std /= len(loader)
 
-  # info_dict['mean'] = mean.tolist()
-  # info_dict['std'] = std.tolist()
- 
-  mean = [0.4914, 0.4822, 0.4465]
-  std = [0.2023, 0.1994, 0.2010]
-  if for_train:
-    if data_aug:
-      height, width = dataset[0][0].shape[1:]
-      pad = 4
-      train_transform = Compose([
-        Resize((height + pad, width + pad)),
-        RandomCrop((height, width)),
-        RandomHorizontalFlip(),
-        ToTensor(),
-        Normalize(mean=mean, std=std)  # Normalize with std=std to keep images in the [0, 1] range
-      ])
-    else:
-      train_transform = Compose([
+  info_dict['mean'] = mean.tolist()
+  info_dict['std'] = std.tolist()
+  
+  transform = Compose([
         ToTensor(),
         Normalize(mean=mean, std=std)
       ])
+  
+  if data_aug:
+    height, width = dataset[0][0].shape[1:]
+    pad = 4
+    train_transform = Compose([
+      Resize((height + pad, width + pad)),
+      RandomCrop((height, width)),
+      RandomHorizontalFlip()
+    ])
   else:
-    # Normalize for validation and testing
-    validation_transform = Compose([
-        ToTensor(),
-        Normalize(mean=mean, std=std)])
-    
-    test_dataset = CIFAR10(data_path, download=True, train=False, transform=validation_transform)
-    test_loader = DataLoader(
-    test_dataset,
-    batch_size=batch_size,
-    num_workers=num_workers,
-    pin_memory=True)
-    
-  train_dataset = CIFAR10(data_path, download=True, train=True, transform=train_transform)
-  
-  
-  total_samples = len(train_dataset)
-  
-  if limit_data is not None and limit_data < total_samples:
-      sample_indices = random.sample(range(total_samples), limit_data)
-      train_size = int(train_split * limit_data)
-      val_size = limit_data - train_size
+    train_transform = None
 
-      train_indices = sample_indices[:train_size]
-      val_indices = sample_indices[train_size:]
+  # Load CIFAR-10 dataset
+  train_dataset = CIFAR10(data_path, train=True, download=True, transform=transform)
+  test_dataset = CIFAR10(data_path, train=False, download=True, transform=transform)
+  
+  # Split train_dataset into train and validation
+  train_size = int(train_split * len(train_dataset))
+  val_size = len(train_dataset) - train_size
+  train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
-      train_dataset = torch.utils.data.Subset(train_dataset, train_indices)
-      val_dataset = torch.utils.data.Subset(train_dataset, val_indices)
+  # Create tensors for train and validation data
+  train_images = torch.stack([image for image, _ in train_dataset])
+  train_labels = torch.tensor([label for _, label in train_dataset])
+  val_images = torch.stack([image for image, _ in val_dataset])
+  val_labels = torch.tensor([label for _, label in val_dataset])
+  
+  # Create custom dataset objects
+  train_custom_dataset = CustomCIFAR10(data=train_images, targets=train_labels, transform=train_transform)
+  val_custom_dataset = CustomCIFAR10(data=val_images, targets=val_labels)
+  
+  total_train_samples = len(train_custom_dataset)
+  total_val_samples = len(val_custom_dataset)
+  
+  if limit_data is not None and limit_data < total_train_samples:
+      train_samples = int(train_split * limit_data)
+      val_samples = int(limit_data - train_samples)
+
+      train_indices = random.sample(range(total_train_samples), train_samples)
+      val_indices = random.sample(range(total_val_samples), val_samples)
+      
+      train_dataset = Subset(train_custom_dataset, train_indices)
+      val_dataset = Subset(val_custom_dataset, val_indices)
   else:
-      train_size = int(train_split * total_samples)
-      val_size = total_samples - train_size
-
-      train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
-    
+      train_dataset = train_custom_dataset
+      val_dataset = val_custom_dataset
+      
   train_loader = DataLoader(
       train_dataset,
       batch_size=batch_size,
@@ -120,14 +137,18 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
       num_workers=num_workers,
       pin_memory=True)
   
-  # train_imgs, _ = next(iter(train_loader))
+  test_loader = DataLoader(
+    test_dataset,
+    batch_size=batch_size,
+    num_workers=num_workers,
+    pin_memory=True)
   
-  # info_dict['train_records'] = len(train_dataset)
-  # info_dict['valid_records'] = len(val_dataset)
-  # info_dict['test_records'] = len(test_dataset)
-  # info_dict['shape'] = list(train_imgs.shape[1:])
-  
-  # util.create_info_file(out_path=data_path, info_dict=info_dict)
+  print(f"Limiting training samples to {len(train_dataset)} and validation samples to {len(val_dataset)}")  
+  info_dict['train_records'] = len(train_dataset)
+  info_dict['valid_records'] = len(val_dataset)
+  info_dict['test_records'] = len(test_dataset)
+  info_dict['shape'] = list(train_dataset[0][0].shape)
+  util.create_info_file(out_path=data_path, info_dict=info_dict)
   
   if for_train:
     print("All set for training!")
