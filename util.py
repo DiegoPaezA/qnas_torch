@@ -51,3 +51,17 @@ def create_info_file(out_path, info_dict):
 
     with open(os.path.join(out_path, 'data_info.txt'), 'w') as f:
         yaml.dump(info_dict, f)
+        
+def check_file_exists(file_path):
+    """ Check if a file exists.
+    
+    Args:
+        file_path: (str) path to the file to check.
+        
+    Returns:
+        True if the file exists, False otherwise.
+    """
+    if os.path.exists(file_path):
+        return True
+    else:
+        return False
