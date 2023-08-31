@@ -133,7 +133,9 @@ class ResidualV1(nn.Module):
         tensor = self.bn2(tensor)
               
         print(f'tensor.shape Layer 2: {tensor.shape}')
+        
         inputs, tensor = pad_features([inputs, tensor], channels_last=False)
+        
         print(f'inputs.shape Layer 2: {inputs.shape}')
         print(f'tensor.shape Pad: {tensor.shape}')
         
