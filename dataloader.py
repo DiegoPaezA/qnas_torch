@@ -1,10 +1,27 @@
 import torch
 import random
 import util
+import os
 from time import time
 from torchvision.datasets import CIFAR10, CIFAR100
 from torch.utils.data import DataLoader, random_split, Dataset, Subset
 from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, RandomHorizontalFlip, Normalize
+
+cifar10_info = {
+  'dataset': 'CIFAR10',
+  'mean': [0.491400808095932, 0.48215898871421814, 0.44653093814849854],
+  'std': [0.24703224003314972, 0.24348513782024384, 0.26158785820007324],
+  'shape': [3, 32, 32]
+}
+
+cifar_100_info = {
+  'dataset': 'CIFAR100',
+  'mean': [0.50707516, 0.48654887, 0.44091784],
+  'std': [0.26733429, 0.25643846, 0.27615047],
+  'shape': [3, 32, 32]
+}
+
+
 
 class CustomCIFAR10(Dataset):
     def __init__(self, data, targets, transform=None):
@@ -23,7 +40,7 @@ class CustomCIFAR10(Dataset):
 
         return image, target
 
-def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,seed=None,data_aug=True,for_train=True, num_workers=2):
+def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=2):
   """
   This function creates a dataloader for the CIFAR10 dataset.
   
@@ -31,11 +48,13 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     data_path: Path to the data folder
     train_split: float (0,1 - default 0.9)
       Percentage of the data to be used for training
+    batch_size: int (default 24)
     limit_data: int (default None)
       Limit the number of samples to be used for training and validation
-    batch_size: int (default 24)
     seed: int (default None)
       Seed for the random number generator
+    info: dict (default None)
+      Dictionary containing the mean, std and shape of the dataset
     data_aug: bool (default True)
       If True, data augmentation and normalization is applied to the dataset
     for_train: bool (default True)
@@ -48,8 +67,6 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     test_loader: torch.utils.data.DataLoader
   """
   
-  info_dict = {'dataset': f'CIFAR{10}'}
-  
   if seed is None:
     seed = int(time())
     random.seed(seed)
@@ -57,30 +74,36 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-  info_dict['seed'] = seed
+  file_path = os.path.join(data_path, 'data_info.txt')
+  file_exists = util.check_file_exists(file_path)
   
-  # Calculate mean and standard deviation from the entire dataset
-  dataset = CIFAR10(data_path, download=True, transform=ToTensor())
-  loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
-  mean = torch.zeros(3)
-  std = torch.zeros(3)
-  
-  for images, _ in loader:
-      mean += torch.mean(images, dim=(0, 2, 3))
-      std += torch.std(images, dim=(0, 2, 3))
-  mean /= len(loader)
-  std /= len(loader)
-
-  info_dict['mean'] = mean.tolist()
-  info_dict['std'] = std.tolist()
-  
+  if info is None and file_exists:
+    #print("Loading info locally")
+    mean = cifar10_info['mean']
+    std = cifar10_info['std']
+    channels,height,width  = cifar10_info['shape']
+  else:
+    # Calculate mean and standard deviation from the entire dataset
+    dataset = CIFAR10(data_path, download=True, transform=ToTensor())
+    loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
+    mean = torch.zeros(3)
+    std = torch.zeros(3)
+    
+    for images, _ in loader:
+        mean += torch.mean(images, dim=(0, 2, 3))
+        std += torch.std(images, dim=(0, 2, 3))
+    mean /= len(loader)
+    std /= len(loader)
+    mean = mean.tolist()
+    std = std.tolist()
+    channels,height,width = dataset[0][0].shape
+      
   transform = Compose([
         ToTensor(),
         Normalize(mean=mean, std=std)
       ])
   
   if data_aug:
-    height, width = dataset[0][0].shape[1:]
     pad = 4
     train_transform = Compose([
       Resize((height + pad, width + pad)),
@@ -93,6 +116,15 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
   # Load CIFAR-10 dataset
   train_dataset = CIFAR10(data_path, train=True, download=True, transform=transform)
   test_dataset = CIFAR10(data_path, train=False, download=True, transform=transform)
+  
+  if not for_train:
+    test_loader = DataLoader(
+    test_dataset,
+    batch_size=batch_size,
+    num_workers=num_workers,
+    pin_memory=True)
+    print("All set for testing!")
+    return test_loader
   
   # Split train_dataset into train and validation
   train_size = int(train_split * len(train_dataset))
@@ -131,31 +163,33 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
       num_workers=num_workers,
       pin_memory=True,
       shuffle=True)
+  
   val_loader = DataLoader(
       val_dataset,
       batch_size=batch_size,
       num_workers=num_workers,
       pin_memory=True)
   
-  test_loader = DataLoader(
-    test_dataset,
-    batch_size=batch_size,
-    num_workers=num_workers,
-    pin_memory=True)
   
-  print(f"Limiting training samples to {len(train_dataset)} and validation samples to {len(val_dataset)}")  
+  #print(f"Limiting training samples to {len(train_dataset)} and validation samples to {len(val_dataset)}")  
+  info_dict = {'dataset': f'CIFAR{10}'}
+  info_dict['seed'] = seed
+  
   info_dict['train_records'] = len(train_dataset)
   info_dict['valid_records'] = len(val_dataset)
   info_dict['test_records'] = len(test_dataset)
-  info_dict['shape'] = list(train_dataset[0][0].shape)
+  
+  info_dict['shape'] = [channels, height, width]
+    
+  info_dict['mean'] = mean
+  info_dict['std'] = std
+  
   util.create_info_file(out_path=data_path, info_dict=info_dict)
   
-  if for_train:
-    print("All set for training!")
-    return train_loader, val_loader
-  else:
-    print("All set for testing!")
-    return test_loader
+  print("All set for training!")
+  
+  return train_loader, val_loader
+
 
 
 def CIFAR100_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,seed=None,data_aug=True,for_train=True, num_workers=2):
