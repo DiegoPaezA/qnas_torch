@@ -146,24 +146,97 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     elif params['dataset'] == 'Cifar100':
         data_info = input.cifar100_info
 
-    net = model.NetworkGraph(num_classes=data_info["num_classes"], mu=0.99)
+    model = model.NetworkGraph(num_classes=data_info["num_classes"], mu=0.99)
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
-    net.create_functions(fn_dict=filtered_dict, net_list=net_list)
+    model.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
-    params['net'] = net
+    params['model'] = model
     params['net_list'] = net_list
 
     # Training time start counting here. It needs to be defined outside model_fn(), to make it
     # valid in the multiple calls to classifier.train(). Otherwise, it would be restarted.
     params['t0'] = time.time()
     
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.RMSprop(model.parameters(), lr=params['learning_rate'], 
+                                    momentum=params['momentum'], weight_decay=params['decay'])
 
+    # Set the total number of epochs
+    total_epochs = params['max_epochs']
+    
+
+    # Set the number of epochs for training without validation
+    train_epochs_without_validation = total_epochs - params['epochs_to_eval']
+
+    best_accuracy = 0.0  # Variable to store the best accuracy
+
+    # Training loop for 45 epochs without validation
+    for epoch in range(train_epochs_without_validation):
+        model.train()
+        total_loss = 0.0
+        for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}/{total_epochs}'):
+            optimizer.zero_grad()
+            inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
+            y_logits = model(inputs).to(device)
+            loss = criterion(y_logits, labels)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        
+        print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {total_loss / len(train_loader)}")
+        
+    # Training loop for the final 5 epochs with validation
+    for epoch in range(train_epochs_without_validation, total_epochs):
+        model.train()
+        total_loss = 0.0
+        for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}/{total_epochs}'):
+            optimizer.zero_grad()
+            inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
+            y_logits = model(inputs).to(device)
+            loss = criterion(y_logits, labels)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        
+        print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {total_loss / len(train_loader)}")
+
+        if epoch >= train_epochs_without_validation:
+            model.eval()
+            with torch.no_grad():
+                validation_loss = 0.0
+                correct = 0
+                total = 0
+                for inputs, labels in tqdm(val_loader, desc=f'Validation'):
+                    inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
+
+                    y_logits = model(inputs).to(device)
+                    loss = criterion(y_logits, labels)
+                    validation_loss += loss.item()
+                    _, predicted = y_logits.max(1)
+                    total += labels.size(0)
+                    correct += predicted.eq(labels).sum().item()
+
+                accuracy = 100 * correct / total
+                print(f"Validation loss: {validation_loss / len(val_loader)}")
+                print(f"Validation accuracy: {accuracy}%")
+
+                # Check if the current accuracy is the best, and if so, save the model
+                if accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                    
+    params['t1'] = time.time()
+    print(f"Best Validation Accuracy: {best_accuracy}%")
+    
+    # print time spent in training in minutes
+    print(f"Training time: {(params['t1'] - params['t0'])/60} minutes")
 
     try:
         # accuracy = train_and_eval(params=hparams, run_config=config,
         #                           train_input_fn=train_input_fn,
         #                           eval_input_fn=eval_input_fn)
-        accuracy = 0
+        accuracy = best_accuracy
     except torch.nn.modules.module.ModuleAttributeError:
         # If the model is not valid, it will raise an exception.
         # We return a very low accuracy, so that this individual is not selected.

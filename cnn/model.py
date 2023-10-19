@@ -13,7 +13,7 @@ import torch.nn.functional as F
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
 
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=True):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
         """ Initialize ConvBlock.
 
         Args:
@@ -71,7 +71,7 @@ class ConvBlock(nn.Module):
 
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
-    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=True):
+    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
         """ Initialize ResidualV1.
 
         Args:
@@ -151,7 +151,7 @@ class ResidualV1(nn.Module):
 
 class ResidualV1Pr(nn.Module):
     """ Residual V1 block with projection shortcut """
-    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=True):
+    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
         """ Initialize ResidualV1.
 
         Args:
@@ -236,7 +236,7 @@ class ResidualV1Pr(nn.Module):
 class MaxPooling(nn.Module):
     """ Max Pooling layer """
 
-    def __init__(self, kernel=1, strides=1, channels_last=True):
+    def __init__(self, kernel=1, strides=1, channels_last=False):
         """ Initialize MaxPooling.
 
         Args:
@@ -282,7 +282,7 @@ class MaxPooling(nn.Module):
 class AvgPooling(nn.Module):
     """ Average Pooling layer """
 
-    def __init__(self, kernel=1, strides=1, channels_last=True):
+    def __init__(self, kernel=1, strides=1, channels_last=False):
         """ Initialize AvgPooling.
 
         Args:
@@ -370,7 +370,7 @@ functions_dict = {'ConvBlock': ConvBlock,
                   'FullyConnected': FullyConnected,
                   'no_op': NoOp}
  
-def pad_features(tensors, channels_last=True):
+def pad_features(tensors, channels_last=False):
     """ Pad with zeros the channels of the tensor in *tensors* list 
     that have the smaller number of feature maps.
     Args:
@@ -455,7 +455,7 @@ class NetworkGraph(nn.Module):
         Returns:
             logits tensor.
         """
-        print(f'inputs.shape: {inputs.shape}')
+        #print(f'inputs.shape: {inputs.shape}')
         if debug:
             for f in self.layers:
                 print(f'f: {f}')
@@ -463,7 +463,7 @@ class NetworkGraph(nn.Module):
                 print(f'layer output.shape: {inputs.shape}')
         else:
             inputs = self.model(inputs)
-            print(f'layer output.shape: {inputs.shape}')
+            #print(f'layer output.shape: {inputs.shape}')
 
         if self.fc is None:
             batch_size, num_features, height, width = inputs.size()
@@ -472,8 +472,8 @@ class NetworkGraph(nn.Module):
 
         batch_size = inputs.size(0)
         inputs = inputs.reshape(batch_size, -1)
-        print('FullyConnected')
-        print(f'layer output.shape: {inputs.shape}')
+        #print('FullyConnected')
+        #print(f'layer output.shape: {inputs.shape}')
         logits = self.fc(inputs)
 
         return logits
