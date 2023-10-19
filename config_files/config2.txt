@@ -42,6 +42,7 @@ train:
     dataset: Cifar10
     data_augmentation: True
     subtract_mean: True
+    limit_data: 10000
 
     # Tensorflow
     save_checkpoints_epochs: 10
