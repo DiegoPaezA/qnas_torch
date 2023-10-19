@@ -17,14 +17,16 @@ cifar10_info = {
   'dataset': 'CIFAR10',
   'mean': [0.491400808095932, 0.48215898871421814, 0.44653093814849854],
   'std': [0.24703224003314972, 0.24348513782024384, 0.26158785820007324],
-  'shape': [3, 32, 32]
+  'shape': [3, 32, 32], 
+  'num_classes': 10
 }
 
 cifar100_info = {
   'dataset': 'CIFAR100',
   'mean': [0.5070757865905762, 0.48655030131340027, 0.4409191310405731],
   'std': [0.2673342823982239, 0.2564384639263153, 0.2761504650115967],
-  'shape': [3, 32, 32]
+  'shape': [3, 32, 32],
+  'num_classes': 100
 }
 
 class CustomCIFAR(Dataset):
@@ -44,7 +46,10 @@ class CustomCIFAR(Dataset):
 
         return image, target
 
-def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=2):
+def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,
+                   limit_data=None,seed=None,
+                   info:dict=None,data_aug=True,
+                   for_train=True, num_workers=2):
   """
   This function creates a dataloader for the CIFAR10 dataset.
   
@@ -60,7 +65,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     info: dict (default None)
       Dictionary containing the mean, std and shape of the dataset
     data_aug: bool (default True)
-      If True, data augmentation and normalization is applied to the dataset
+      If True, data augmentation and normalization is applied to the train split
     for_train: bool (default True)
       If True, returns train and validation dataloaders, otherwise returns test dataloader
     num_workers: int (default 2)

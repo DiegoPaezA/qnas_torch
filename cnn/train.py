@@ -1,17 +1,19 @@
 """
 based on: https://github.com/mdrs-thiago/PUC_Redes_Neurais/blob/main/pos_grad/lista%201/model_utils.py
 """
-
+import os
+import time
+import numpy as np
+import torch
 import torch.nn as nn
 from tqdm.notebook import tqdm
-import torch
-import numpy as np
-from metrics import *
+from cnn.metrics import *
 from typing import Tuple, Dict, List
+from cnn import model, input
 
 def train(model: torch.nn.Module , train_loader: torch.utils.data.DataLoader, 
          val_set: Tuple[torch.Tensor, torch.Tensor], epochs: int, device: torch.device, 
-         lr: float, binary: bool = True, optimizer_name:str="RMSProp", skip: int = 1) -> Tuple[Dict[str, List[float]], torch.Tensor]:
+         lr: float, binary: bool = False, optimizer_name:str="RMSProp", skip: int = 1) -> Tuple[Dict[str, List[float]], torch.Tensor]:
     """
     Trains a Pytorch model on a given training data.
 
@@ -111,3 +113,68 @@ def evaluate(model: torch.nn.Module, val_set: Tuple[torch.tensor, torch.tensor],
     y_pred = torch.argmax(y_pred, dim=1)
 
     return y_pred, loss.item(), acc.item()
+
+def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
+    """ Train and evaluate a model using evolved parameters.
+
+    Args:
+        id_num: string identifying the generation number and the individual number.
+        data_info: dictionary with information about the dataset (number of classes, etc.).
+        params: dictionary with parameters necessary for training, including the evolved
+            hyperparameters.
+        fn_dict: dict with definitions of the possible layers (name and parameters).
+        net_list: list with names of layers defining the network, in the order they appear.
+
+    Returns:
+        accuracy of the model for the validation set.
+    """
+
+
+    model_path = os.path.join(params['experiment_path'], id_num)
+
+        # Load data
+    if params['dataset'] == 'Cifar10':
+        
+        data_info = input.cifar10_info
+        data_path = 'cifar10_data'
+        
+        train_loader, val_loader = input.CIFAR10_loader(data_path, limit_data=params['limit_data'],
+                                                        for_train=True, 
+                                                        data_aug=params['data_augmentation'],
+                                                        batch_size=params['batch_size'])
+        
+    elif params['dataset'] == 'Cifar100':
+        data_info = input.cifar100_info
+
+    net = model.NetworkGraph(num_classes=data_info["num_classes"], mu=0.99)
+    filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
+    net.create_functions(fn_dict=filtered_dict, net_list=net_list)
+
+    params['net'] = net
+    params['net_list'] = net_list
+
+    # Training time start counting here. It needs to be defined outside model_fn(), to make it
+    # valid in the multiple calls to classifier.train(). Otherwise, it would be restarted.
+    params['t0'] = time.time()
+    
+
+
+    try:
+        # accuracy = train_and_eval(params=hparams, run_config=config,
+        #                           train_input_fn=train_input_fn,
+        #                           eval_input_fn=eval_input_fn)
+        accuracy = 0
+    except torch.nn.modules.module.ModuleAttributeError:
+        # If the model is not valid, it will raise an exception.
+        # We return a very low accuracy, so that this individual is not selected.
+        accuracy = 0.01
+    except RuntimeError:
+        # If the model is not valid, it will raise an exception.
+        # We return a very low accuracy, so that this individual is not selected.
+        accuracy = 0.01
+    except ValueError:
+        # If the model is not valid, it will raise an exception.
+        # We return a very low accuracy, so that this individual is not selected.
+        accuracy = 0.01
+
+    return accuracy
