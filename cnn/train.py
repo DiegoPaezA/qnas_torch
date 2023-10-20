@@ -159,8 +159,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     params['model_net'] = model_net
     params['net_list'] = net_list
 
-    # Training time start counting here. It needs to be defined outside model_fn(), to make it
-    # valid in the multiple calls to classifier.train(). Otherwise, it would be restarted.
+    # Training time start counting here.
     params['t0'] = time.time()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -201,7 +200,6 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
 
         
     # Training loop for the final 5 epochs with validation
-
     for epoch in tqdm(range(train_epochs_without_validation, total_epochs), desc="Training with validation"):
         model_net.train()
         total_loss = 0.0
@@ -214,8 +212,6 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
             optimizer.step()
             total_loss += loss.item()
         
-        
-
         if epoch >= train_epochs_without_validation:
             model_net.eval()
             with torch.no_grad():
