@@ -131,8 +131,12 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
 
 
     model_path = os.path.join(params['experiment_path'], id_num)
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+        
+    best_model_path = os.path.join(model_path, 'best_model.pth')
 
-        # Load data
+    # Load data
     if params['dataset'] == 'Cifar10':
         
         data_info = input.cifar10_info
@@ -147,7 +151,9 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         data_info = input.cifar100_info
 
     model_net = model.NetworkGraph(num_classes=data_info["num_classes"], mu=0.99)
+    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
+    
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
     params['model_net'] = model_net
@@ -157,9 +163,13 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     # valid in the multiple calls to classifier.train(). Otherwise, it would be restarted.
     params['t0'] = time.time()
     
-    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = "cpu"
-    #model_net.to(device)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Load the model_net to the GPU
+    inputs, labels = next(iter(train_loader))
+    _ = model_net(inputs)
+    model_net.to(device)
+    
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'], weight_decay=params['decay'])
@@ -174,34 +184,37 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     best_accuracy = 0.0  # Variable to store the best accuracy
 
     # Training loop for 45 epochs without validation
-    for epoch in range(train_epochs_without_validation):
+    for epoch in tqdm(range(1, train_epochs_without_validation+1), desc="Training without validation"):
         model_net.train()
         total_loss = 0.0
-        for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}/{total_epochs}'):
+        for inputs, labels in train_loader:
             optimizer.zero_grad()
             inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
-            y_logits = model_net(inputs).to(device)
+            y_logits = model_net(inputs)
             loss = criterion(y_logits, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        
-        print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {total_loss / len(train_loader)}")
+
+        if epoch%5 == 0:
+            print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {total_loss / len(train_loader)}")
+
         
     # Training loop for the final 5 epochs with validation
-    for epoch in range(train_epochs_without_validation, total_epochs):
+
+    for epoch in tqdm(range(train_epochs_without_validation, total_epochs), desc="Training with validation"):
         model_net.train()
         total_loss = 0.0
-        for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch + 1}/{total_epochs}'):
+        for inputs, labels in train_loader:
             optimizer.zero_grad()
             inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
-            y_logits = model_net(inputs).to(device)
+            y_logits = model_net(inputs)
             loss = criterion(y_logits, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
         
-        print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {total_loss / len(train_loader)}")
+        
 
         if epoch >= train_epochs_without_validation:
             model_net.eval()
@@ -209,23 +222,26 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
                 validation_loss = 0.0
                 correct = 0
                 total = 0
-                for inputs, labels in tqdm(val_loader, desc=f'Validation'):
+                for inputs, labels in val_loader:
                     inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
 
-                    y_logits = model_net(inputs).to(device)
+                    y_logits = model_net(inputs)
                     loss = criterion(y_logits, labels)
+                    
                     validation_loss += loss.item()
                     _, predicted = y_logits.max(1)
                     total += labels.size(0)
                     correct += predicted.eq(labels).sum().item()
 
                 accuracy = 100 * correct / total
-                print(f"Validation loss: {validation_loss / len(val_loader)}")
-                print(f"Validation accuracy: {accuracy}%")
+                print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {total_loss / len(train_loader)} - Validation loss: {validation_loss / len(val_loader)} - Validation accuracy: {accuracy}%")
+                
 
                 # Check if the current accuracy is the best, and if so, save the model_net
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
+                    # save model
+                    torch.save(model_net.state_dict(), best_model_path)
                     
     params['t1'] = time.time()
     print(f"Best Validation Accuracy: {best_accuracy}%")
