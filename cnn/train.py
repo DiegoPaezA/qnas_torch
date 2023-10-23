@@ -14,6 +14,7 @@ from tqdm.notebook import tqdm
 from cnn.metrics import *
 from typing import Tuple, Dict, List
 from cnn import model, input
+from util import create_info_file
 
 TRAIN_TIMEOUT = 5400
 
@@ -166,6 +167,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
             
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
+                create_info_file(model_path, {'best_accuracy': best_accuracy})
                 torch.save(model_net.state_dict(), best_model_path)
     
     params['t1'] = time.time()
