@@ -171,25 +171,10 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
                 torch.save(model_net.state_dict(), best_model_path)
     
     params['t1'] = time.time()
-    print(f"Best Validation Accuracy: {best_accuracy}%")
+    #print(f"Best Validation Accuracy: {best_accuracy}%")
     
     # print time spent in training in minutes
-    training_time = round((params['t1'] - params['t0'])/60, 3)
-    print(f"Training time: {training_time} minutes")
+    #training_time = round((params['t1'] - params['t0'])/60, 3)
+    #print(f"Training time: {training_time} minutes")
     
-    try:
-        accuracy = best_accuracy
-    except torch.nn.modules.module.ModuleAttributeError:
-        # If the model_net is not valid, it will raise an exception.
-        # We return a very low accuracy, so that this individual is not selected.
-        accuracy = 0.01
-    except RuntimeError:
-        # If the model_net is not valid, it will raise an exception.
-        # We return a very low accuracy, so that this individual is not selected.
-        accuracy = 0.01
-    except ValueError:
-        # If the model_net is not valid, it will raise an exception.
-        # We return a very low accuracy, so that this individual is not selected.
-        accuracy = 0.01
-
-    return accuracy
+    return best_accuracy
