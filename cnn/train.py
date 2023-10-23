@@ -1,5 +1,9 @@
-"""
-based on: https://github.com/mdrs-thiago/PUC_Redes_Neurais/blob/main/pos_grad/lista%201/model_utils.py
+""" Copyright (c) 2023, Diego Páez
+* Licensed under the MIT license
+
+- Compute the fitness of a model_net using the evolved networks.
+
+
 """
 import os
 import time
@@ -11,108 +15,68 @@ from cnn.metrics import *
 from typing import Tuple, Dict, List
 from cnn import model, input
 
-def train(model_net: torch.nn.Module , train_loader: torch.utils.data.DataLoader, 
-         val_set: Tuple[torch.Tensor, torch.Tensor], epochs: int, device: torch.device, 
-         lr: float, binary: bool = False, optimizer_name:str="RMSProp", skip: int = 1) -> Tuple[Dict[str, List[float]], torch.Tensor]:
+TRAIN_TIMEOUT = 5400
+
+# Define a function for training
+def train_model(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer,
+                train_loader:torch.utils.data.DataLoader, device:torch.device):
     """
-    Trains a Pytorch model_net on a given training data.
-
-    Parameters:
-    model_net (torch.nn.Module): The model_net to be trained
-    train_loader (DataLoader): The training data in the form of a Pytorch DataLoader
-    val_set (tuple): A tuple containing the validation data and labels
-    epochs (int): The number of times the training data should be passed through the model_net
-    device (str or torch.device): The device on which to perform the computations (e.g. 'cpu' or 'cuda')
-    lr (float): The learning rate for the optimizer
-    binary (bool): Boolean indicating whether the task is binary classification or not. Default: True
-    optimizer_name (str): The name of the optimizer to be used. Default: 'RMSProp'
-    skip (int): The number of epochs after which the training and validation results will be printed. Default: 1
-
+    Args:
+        model: model to be trained
+        criterion: loss function
+        optimizer: optimization algorithm
+        train_loader: data loader for training set
+        device: device to run the training on (CPU or GPU)
+        
     Returns:
-    tuple: A tuple containing the training history and the predicted labels after training
+        average loss over the training set
     """
+    model.train()
+    total_loss = 0.0
 
+    for inputs, labels in train_loader:
+        optimizer.zero_grad()
+        inputs, labels = inputs.to(device), labels.to(device)
+        y_logits = model(inputs)
+        loss = criterion(y_logits, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
 
-    if binary:
-        criterion = nn.BCEWithLogitsLoss()
-    else:
-        criterion = nn.CrossEntropyLoss()
+    return total_loss / len(train_loader)
 
-    if optimizer_name == 'RMSProp':
-        #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=lr, alpha=decay, momentum=momentum)
-        optimizer = torch.optim.RMSprop(model_net.parameters(), lr=lr)
-    else:
-        #optimizer = torch.optim.SGD(model_net.parameters(), lr=lr, momentum=momentum)
-        optimizer = torch.optim.SGD(model_net.parameters(), lr=lr)
-    history = {'acc_train' : [], 'loss_train': [], 'acc_val': [], 'loss_val': []}
-
-    for e in tqdm(range(1, epochs+1)):
-
-        y_hat = np.array([])
-
-        train_epoch_loss = 0
-        train_epoch_acc = 0
-        model_net.train()
-        for X_train_batch, y_train_batch in train_loader:
-            X, y = X_train_batch.to(device), y_train_batch.to(device)
-            optimizer.zero_grad()
-            
-            y_pred = model_net(X)
-            
-            loss = criterion(y_pred, y)
-            if binary:
-                acc = binary_acc(y_pred,y)
-            else:
-                acc = accuracy(y_pred, y)
-            
-            loss.backward()
-            optimizer.step()
-            
-            train_epoch_loss += loss.item()
-            train_epoch_acc += acc.item()
-            y_p = torch.argmax(y_pred, dim=1)
-            y_hat = np.concatenate((y_hat, y_p))
-
-
-        model_net.eval()
-        _, val_loss, val_acc = evaluate(model_net, val_set, criterion, binary=binary)
-
-        history['acc_train'].append(train_epoch_acc/len(train_loader))
-        history['loss_train'].append(train_epoch_loss/len(train_loader))
-        history['acc_val'].append(val_acc)
-        history['loss_val'].append(val_loss)
-
-        if e%skip == 0:
-            print(f'Epoch {e+0:03}: | Train Loss: {train_epoch_loss/len(train_loader):.3f} | Val Loss: {val_loss:.4f} | Train Acc: {train_epoch_acc/len(train_loader):.4f}| Val Acc: {val_acc:.4f}')
-    return history, y_hat
-
-
-def evaluate(model_net: torch.nn.Module, val_set: Tuple[torch.tensor, torch.tensor], 
-            criterion: torch.nn.Module, binary:bool =True) -> Tuple[torch.tensor, float, float]:
+# Define a function for validation
+def validate_model(model:torch.nn.Module, criterion:torch.nn.Module, 
+                   val_loader:torch.utils.data.DataLoader, device:torch.device):
     """
-    Evaluates a Pytorch model_net on a given dataset.
-    Parameters:
-    model_net (torch.nn.Module): The model_net to be evaluated
-    data (tuple): A tuple containing the data and labels
-    criterion (torch.nn.Module): The loss function to be used
-    binary (bool): Boolean indicating whether the task is binary classification or not. Default: True
+    Args:
+        model: model to be evaluated
+        criterion: loss function
+        val_loader: data loader for validation set
+        device: device to run the evaluation on (CPU or GPU)
+        
     Returns:
-    tuple: A tuple containing predicted labels, loss, and accuracy
+        average loss and accuracy over the validation set
     """
-    
-    X = val_set.X_data
-    y = val_set.y_data
-    
+    model.eval()
+    validation_loss = 0.0
+    correct = 0
+    total = 0
+
     with torch.no_grad():
-        y_pred = model_net(X)
-    loss = criterion(y_pred, y)
-    if binary:
-        acc = binary_acc(y_pred, y)
-    else:
-        acc = accuracy(y_pred, y)
-    y_pred = torch.argmax(y_pred, dim=1)
+        for inputs, labels in val_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            y_logits = model(inputs)
+            loss = criterion(y_logits, labels)
+            validation_loss += loss.item()
+            _, predicted = y_logits.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
 
-    return y_pred, loss.item(), acc.item()
+    accuracy = 100 * correct / total
+    return validation_loss / len(val_loader), accuracy
+
+
 
 def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     """ Train and evaluate a model_net using evolved parameters.
@@ -173,82 +137,39 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'], weight_decay=params['decay'])
 
-    # Set the total number of epochs
     total_epochs = params['max_epochs']
-    
-
-    # Set the number of epochs for training without validation
     train_epochs_without_validation = total_epochs - params['epochs_to_eval']
-
-    best_accuracy = 0.0  # Variable to store the best accuracy
-
-    # Training loop for 45 epochs without validation
-    for epoch in tqdm(range(1, train_epochs_without_validation+1), desc="Training without validation"):
-        model_net.train()
-        total_loss = 0.0
-        for inputs, labels in train_loader:
-            optimizer.zero_grad()
-            inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
-            y_logits = model_net(inputs)
-            loss = criterion(y_logits, labels)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-
-        if epoch%5 == 0:
-            print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {total_loss / len(train_loader)}")
-
-        
-    # Training loop for the final 5 epochs with validation
+    best_accuracy = 0.0
+    
+    # Train the model for 45 epochs without validation
+    for epoch in tqdm(range(1, train_epochs_without_validation + 1), desc="Training without validation"):
+        train_loss = train_model(model_net, criterion, optimizer, train_loader, device)
+        if epoch % 5 == 0:
+            print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {train_loss}")
+            if time.time() - params['t0'] > TRAIN_TIMEOUT:
+                print("Training time exceeded. Returning low accuracy.")
+                return 0.0
+            
+    # Train the model for 5 epochs with validation
     for epoch in tqdm(range(train_epochs_without_validation, total_epochs), desc="Training with validation"):
-        model_net.train()
-        total_loss = 0.0
-        for inputs, labels in train_loader:
-            optimizer.zero_grad()
-            inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
-            y_logits = model_net(inputs)
-            loss = criterion(y_logits, labels)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
+        train_loss = train_model(model_net, criterion, optimizer, train_loader, device)
         
         if epoch >= train_epochs_without_validation:
-            model_net.eval()
-            with torch.no_grad():
-                validation_loss = 0.0
-                correct = 0
-                total = 0
-                for inputs, labels in val_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)  # Move data to the GPU
-
-                    y_logits = model_net(inputs)
-                    loss = criterion(y_logits, labels)
-                    
-                    validation_loss += loss.item()
-                    _, predicted = y_logits.max(1)
-                    total += labels.size(0)
-                    correct += predicted.eq(labels).sum().item()
-
-                accuracy = 100 * correct / total
-                print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {total_loss / len(train_loader)} - Validation loss: {validation_loss / len(val_loader)} - Validation accuracy: {accuracy}%")
-                
-
-                # Check if the current accuracy is the best, and if so, save the model_net
-                if accuracy > best_accuracy:
-                    best_accuracy = accuracy
-                    # save model
-                    torch.save(model_net.state_dict(), best_model_path)
-                    
+            val_loss, accuracy = validate_model(model_net, criterion, val_loader, device)
+            print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {train_loss} - Validation loss: {val_loss} - Validation accuracy: {accuracy}%")
+            
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                torch.save(model_net.state_dict(), best_model_path)
+    
     params['t1'] = time.time()
     print(f"Best Validation Accuracy: {best_accuracy}%")
     
     # print time spent in training in minutes
-    print(f"Training time: {(params['t1'] - params['t0'])/60} minutes")
-
+    training_time = round((params['t1'] - params['t0'])/60, 3)
+    print(f"Training time: {training_time} minutes")
+    
     try:
-        # accuracy = train_and_eval(params=hparams, run_config=config,
-        #                           train_input_fn=train_input_fn,
-        #                           eval_input_fn=eval_input_fn)
         accuracy = best_accuracy
     except torch.nn.modules.module.ModuleAttributeError:
         # If the model_net is not valid, it will raise an exception.
