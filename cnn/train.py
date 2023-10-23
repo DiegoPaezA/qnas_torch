@@ -134,8 +134,14 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     model_net.to(device)
     
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
-                                    momentum=params['momentum'], weight_decay=params['decay'])
+    
+    if params['optimizer'] == 'RMSProp':
+        optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
+                                    momentum=params['momentum'], weight_decay=params['weight_decay'],
+                                    alpha=params['decay'])
+    else:
+        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
+                                    momentum=params['momentum'],weight_decay=params['weight_decay'])
 
     total_epochs = params['max_epochs']
     train_epochs_without_validation = total_epochs - params['epochs_to_eval']
