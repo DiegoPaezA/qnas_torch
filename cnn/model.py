@@ -432,7 +432,7 @@ class NetworkGraph(nn.Module):
 
         for name in net_list:
             parameters = fn_dict[name]
-            if parameters['function'] == 'no_op':
+            if parameters['function'] == 'NoOp':
                 continue
             if parameters['function'] in ['ConvBlock', 'ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
