@@ -153,7 +153,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     for epoch in tqdm(range(1, train_epochs_without_validation + 1), desc="Training without validation"):
         train_loss = train_model(model_net, criterion, optimizer, train_loader, device)
         if epoch % 5 == 0:
-            #print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {train_loss}")
+            print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {train_loss}")
             if time.time() - params['t0'] > TRAIN_TIMEOUT:
                 print("Training time exceeded. Returning low accuracy.")
                 return 0.0
@@ -164,7 +164,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         
         if epoch >= train_epochs_without_validation:
             val_loss, accuracy = validate_model(model_net, criterion, val_loader, device)
-            #print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {train_loss} - Validation loss: {val_loss} - Validation accuracy: {accuracy}%")
+            print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {train_loss} - Validation loss: {val_loss} - Validation accuracy: {accuracy}%")
             
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
@@ -172,10 +172,5 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
                 torch.save(model_net.state_dict(), best_model_path)
     
     params['t1'] = time.time()
-    #print(f"Best Validation Accuracy: {best_accuracy}%")
-    
-    # print time spent in training in minutes
-    #training_time = round((params['t1'] - params['t0'])/60, 3)
-    #print(f"Training time: {training_time} minutes")
     
     return best_accuracy
