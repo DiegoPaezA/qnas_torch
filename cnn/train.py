@@ -138,8 +138,9 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     
     if params['optimizer'] == 'RMSProp':
         optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
-                                    momentum=params['momentum'], weight_decay=params['weight_decay'],
-                                    alpha=params['decay'])
+                                     momentum=params['momentum'], weight_decay=params['weight_decay'],
+                                     alpha=params['decay'])
+        #optimizer = torch.optim.RMSprop(model_net.parameters())
     else:
         optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'],weight_decay=params['weight_decay'])
@@ -152,7 +153,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     for epoch in tqdm(range(1, train_epochs_without_validation + 1), desc="Training without validation"):
         train_loss = train_model(model_net, criterion, optimizer, train_loader, device)
         if epoch % 5 == 0:
-            print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {train_loss}")
+            #print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {train_loss}")
             if time.time() - params['t0'] > TRAIN_TIMEOUT:
                 print("Training time exceeded. Returning low accuracy.")
                 return 0.0
@@ -163,7 +164,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         
         if epoch >= train_epochs_without_validation:
             val_loss, accuracy = validate_model(model_net, criterion, val_loader, device)
-            print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {train_loss} - Validation loss: {val_loss} - Validation accuracy: {accuracy}%")
+            #print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {train_loss} - Validation loss: {val_loss} - Validation accuracy: {accuracy}%")
             
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
