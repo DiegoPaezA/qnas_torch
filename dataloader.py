@@ -3,8 +3,11 @@ import random
 import util
 import os
 from time import time
+import numpy as np
+from collections import defaultdict
+from sklearn.model_selection import StratifiedShuffleSplit
 from torchvision.datasets import CIFAR10, CIFAR100
-from torch.utils.data import DataLoader, random_split, Dataset, Subset
+from torch.utils.data import DataLoader, Subset
 from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, RandomHorizontalFlip, Normalize
 
 cifar10_info = {
@@ -20,23 +23,6 @@ cifar100_info = {
   'std': [0.2673342823982239, 0.2564384639263153, 0.2761504650115967],
   'shape': [3, 32, 32]
 }
-
-class CustomCIFAR(Dataset):
-    def __init__(self, data, targets, transform=None):
-        self.data = data
-        self.targets = targets
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        image, target = self.data[index], self.targets[index]
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image, target
 
 def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=2):
   """
@@ -101,18 +87,8 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
         Normalize(mean=mean, std=std)
       ])
   
-  if data_aug:
-    pad = 4
-    train_transform = Compose([
-      Resize((height + pad, width + pad)),
-      RandomCrop((height, width)),
-      RandomHorizontalFlip()
-    ])
-  else:
-    train_transform = None
-
   # Load CIFAR-10 dataset
-  train_dataset = CIFAR10(data_path, train=True, download=True, transform=transform)
+  train_dataset_raw = CIFAR10(data_path, train=True, download=True, transform=transform)
   test_dataset = CIFAR10(data_path, train=False, download=True, transform=transform)
   
   if not for_train:
@@ -125,38 +101,66 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     return test_loader
   
   # Split train_dataset into train and validation
-  train_size = int(train_split * len(train_dataset))
-  val_size = len(train_dataset) - train_size
-  train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+  val_split = 1 - train_split
+  
+  # Create train and validation indices using stratified sampling
+  labels = np.array(train_dataset_raw.targets)
+  splitter = StratifiedShuffleSplit(n_splits=1, test_size=val_split)
+  train_indices, val_indices = next(splitter.split(labels, labels)) 
 
-  # Create tensors for train and validation data
-  train_images = torch.stack([image for image, _ in train_dataset])
-  train_labels = torch.tensor([label for _, label in train_dataset])
-  val_images = torch.stack([image for image, _ in val_dataset])
-  val_labels = torch.tensor([label for _, label in val_dataset])
-  
-  # Create custom dataset objects
-  train_custom_dataset = CustomCIFAR(data=train_images, targets=train_labels, transform=train_transform)
-  val_custom_dataset = CustomCIFAR(data=val_images, targets=val_labels)
-  
-  total_train_samples = len(train_custom_dataset)
-  total_val_samples = len(val_custom_dataset)
+  total_train_samples = len(train_indices)
   
   if limit_data is not None and limit_data < total_train_samples:
-      train_samples = int(train_split * limit_data)
-      val_samples = int(limit_data - train_samples)
+    train_samples = int(train_split * limit_data)
+    val_samples = int(limit_data - train_samples)
+    
+    max_samples_per_class_train = train_samples/10
+    max_samples_per_class_val = val_samples/10
 
-      train_indices = random.sample(range(total_train_samples), train_samples)
-      val_indices = random.sample(range(total_val_samples), val_samples)
-      
-      train_dataset = Subset(train_custom_dataset, train_indices)
-      val_dataset = Subset(val_custom_dataset, val_indices)
+    # Create a dictionary to track the number of samples per class
+    train_samples_per_class = defaultdict(int)
+    val_samples_per_class = defaultdict(int)
+    
+    train_indices_limited = []
+    val_indices_limited = []
+
+    random.shuffle(train_indices)
+    random.shuffle(val_indices)
+    
+    # Iterate through the training indices to limit the number of samples per class
+    for idx in train_indices:
+      _, target = train_dataset_raw[idx]
+      if not train_samples_per_class[target] >= max_samples_per_class_train:
+          train_indices_limited.append(idx)
+          train_samples_per_class[target] += 1
+
+    # Iterate through the validation indices to limit the number of samples per class
+    for idx in val_indices:
+      _, target = train_dataset_raw[idx]
+      if not val_samples_per_class[target] >= max_samples_per_class_val:
+        val_indices_limited.append(idx)
+        val_samples_per_class[target] += 1
+
+    # Create Subset objects using the limited indices
+    train_dataset = Subset(train_dataset_raw, train_indices_limited)
+    val_dataset = Subset(train_dataset_raw, val_indices_limited)
   else:
-      train_dataset = train_custom_dataset
-      val_dataset = val_custom_dataset
-      
+    train_dataset = Subset(train_dataset_raw, train_indices)
+    val_dataset = Subset(train_dataset_raw, val_indices)
+    
+  if data_aug:
+    pad = 4
+    train_transform = Compose([
+      Resize((height + pad, width + pad)),
+      RandomCrop((height, width)),
+      RandomHorizontalFlip()
+    ])
+    train_subset = [(train_transform(sample), target) for sample, target in train_dataset]
+  else:
+    train_subset = train_dataset
+  
   train_loader = DataLoader(
-      train_dataset,
+      train_subset,
       batch_size=batch_size,
       num_workers=num_workers,
       pin_memory=True,
@@ -253,18 +257,8 @@ def CIFAR100_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None
         Normalize(mean=mean, std=std)
       ])
   
-  if data_aug:
-    pad = 4
-    train_transform = Compose([
-      Resize((height + pad, width + pad)),
-      RandomCrop((height, width)),
-      RandomHorizontalFlip()
-    ])
-  else:
-    train_transform = None
-
   # Load CIFAR-100 dataset
-  train_dataset = CIFAR100(data_path, train=True, download=True, transform=transform)
+  train_dataset_raw = CIFAR100(data_path, train=True, download=True, transform=transform)
   test_dataset = CIFAR100(data_path, train=False, download=True, transform=transform)
   
   if not for_train:
@@ -277,38 +271,67 @@ def CIFAR100_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None
     return test_loader
   
   # Split train_dataset into train and validation
-  train_size = int(train_split * len(train_dataset))
-  val_size = len(train_dataset) - train_size
-  train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+  val_split = 1 - train_split
+  
+  # Create train and validation indices using stratified sampling
+  labels = np.array(train_dataset_raw.targets)
+  splitter = StratifiedShuffleSplit(n_splits=1, test_size=val_split)
+  train_indices, val_indices = next(splitter.split(labels, labels)) 
 
-  # Create tensors for train and validation data
-  train_images = torch.stack([image for image, _ in train_dataset])
-  train_labels = torch.tensor([label for _, label in train_dataset])
-  val_images = torch.stack([image for image, _ in val_dataset])
-  val_labels = torch.tensor([label for _, label in val_dataset])
-  
-  # Create custom dataset objects
-  train_custom_dataset = CustomCIFAR(data=train_images, targets=train_labels, transform=train_transform)
-  val_custom_dataset = CustomCIFAR(data=val_images, targets=val_labels)
-  
-  total_train_samples = len(train_custom_dataset)
-  total_val_samples = len(val_custom_dataset)
+  total_train_samples = len(train_indices)
   
   if limit_data is not None and limit_data < total_train_samples:
-      train_samples = int(train_split * limit_data)
-      val_samples = int(limit_data - train_samples)
+    train_samples = int(train_split * limit_data)
+    val_samples = int(limit_data - train_samples)
+    
+    max_samples_per_class_train = train_samples/10
+    max_samples_per_class_val = val_samples/10
 
-      train_indices = random.sample(range(total_train_samples), train_samples)
-      val_indices = random.sample(range(total_val_samples), val_samples)
-      
-      train_dataset = Subset(train_custom_dataset, train_indices)
-      val_dataset = Subset(val_custom_dataset, val_indices)
+    # Create a dictionary to track the number of samples per class
+    train_samples_per_class = defaultdict(int)
+    val_samples_per_class = defaultdict(int)
+    
+    train_indices_limited = []
+    val_indices_limited = []
+
+    random.shuffle(train_indices)
+    random.shuffle(val_indices)
+    
+    # Iterate through the training indices to limit the number of samples per class
+    for idx in train_indices:
+      _, target = train_dataset_raw[idx]
+      if not train_samples_per_class[target] >= max_samples_per_class_train:
+          train_indices_limited.append(idx)
+          train_samples_per_class[target] += 1
+
+    # Iterate through the validation indices to limit the number of samples per class
+    for idx in val_indices:
+      _, target = train_dataset_raw[idx]
+      if not val_samples_per_class[target] >= max_samples_per_class_val:
+        val_indices_limited.append(idx)
+        val_samples_per_class[target] += 1
+
+    # Create Subset objects using the limited indices
+    train_dataset = Subset(train_dataset_raw, train_indices_limited)
+    val_dataset = Subset(train_dataset_raw, val_indices_limited)
   else:
-      train_dataset = train_custom_dataset
-      val_dataset = val_custom_dataset
-      
+    train_dataset = Subset(train_dataset_raw, train_indices)
+    val_dataset = Subset(train_dataset_raw, val_indices)
+  
+  if data_aug:
+    pad = 4
+    train_transform = Compose([
+      Resize((height + pad, width + pad)),
+      RandomCrop((height, width)),
+      RandomHorizontalFlip()
+    ])
+    train_subset = [(train_transform(sample), target) for sample, target in train_dataset]
+  else:
+    train_subset = train_dataset
+  
+  
   train_loader = DataLoader(
-      train_dataset,
+      train_subset,
       batch_size=batch_size,
       num_workers=num_workers,
       pin_memory=True,
