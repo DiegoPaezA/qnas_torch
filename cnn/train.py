@@ -102,7 +102,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     best_model_path = os.path.join(model_path, 'best_model.pth')
     
     if params['limit_data']:
-        limit_data = params['10000']
+        limit_data = params['limit_data_value']
     else:
         limit_data = None
 
