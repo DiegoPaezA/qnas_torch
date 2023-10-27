@@ -100,6 +100,11 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         os.makedirs(model_path)
         
     best_model_path = os.path.join(model_path, 'best_model.pth')
+    
+    if params['limit_data']:
+        limit_data = params['10000']
+    else:
+        limit_data = None
 
     # Load data
     if params['dataset'] == 'Cifar10':
@@ -107,7 +112,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         data_info = input.cifar10_info
         data_path = 'cifar10_data'
         
-        train_loader, val_loader = input.CIFAR10_loader(data_path, limit_data=params['limit_data'],
+        train_loader, val_loader = input.CIFAR10_loader(data_path, limit_data=limit_data,
                                                         for_train=True, 
                                                         data_aug=params['data_augmentation'],
                                                         batch_size=params['batch_size'])
@@ -137,10 +142,10 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     criterion = nn.CrossEntropyLoss()
     
     if params['optimizer'] == 'RMSProp':
-        optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
-                                     momentum=params['momentum'], weight_decay=params['weight_decay'],
-                                     alpha=params['decay'])
-        #optimizer = torch.optim.RMSprop(model_net.parameters())
+        #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
+        #                             momentum=params['momentum'], weight_decay=params['weight_decay'],
+        #                             alpha=params['decay'])
+        optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'])
     else:
         optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'],weight_decay=params['weight_decay'])
