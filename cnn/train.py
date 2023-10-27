@@ -19,33 +19,74 @@ from util import create_info_file
 TRAIN_TIMEOUT = 5400
 
 # Define a function for training
-def train_model(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer,
-                train_loader:torch.utils.data.DataLoader, device:torch.device):
+def train_fitness_scheme(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer,
+                train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
+                max_epochs:int, epochs_to_eval:int, device:torch.device):
     """
     Args:
         model: model to be trained
         criterion: loss function
         optimizer: optimization algorithm
         train_loader: data loader for training set
+        epochs: number of epochs to train
         device: device to run the training on (CPU or GPU)
         
     Returns:
         average loss over the training set
     """
-    model.train()
-    total_loss = 0.0
+    start_eval = max_epochs - epochs_to_eval
+    validation_loss = 0.0
+    accuracy = 0.0
+    
+    for epoch in tqdm(range(1, max_epochs + 1), desc="Training"):
+        model.train()
+        train_loss = 0.0
 
-    for inputs, labels in train_loader:
-        
-        inputs, labels = inputs.to(device), labels.to(device)
-        y_logits = model(inputs)
-        loss = criterion(y_logits, labels)
-        total_loss += loss.item()
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        for inputs, labels in train_loader:
+            
+            inputs, labels = inputs.to(device), labels.to(device)
+            y_logits = model(inputs)
+            loss = criterion(y_logits, labels)
+            train_loss += loss.item()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-    return total_loss / len(train_loader)
+        if epoch >= start_eval:
+            model.eval()
+            validation_loss = 0.0
+            correct = 0
+            total = 0
+
+            with torch.no_grad():
+                for inputs, labels in val_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    y_logits = model(inputs)
+                    loss = criterion(y_logits, labels)
+                    validation_loss += loss.item()
+                    
+                    _, predicted = y_logits.max(1)
+                    total += labels.size(0)
+                    correct += predicted.eq(labels).sum().item()
+
+            accuracy = 100 * correct / total
+            validation_loss /= len(val_loader)
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                # create_info_file(model_path, {'best_accuracy': best_accuracy})
+                # torch.save(model_net.state_dict(), best_model_path)
+        # update training loss for the epoch
+        train_loss /= len(train_loader)
+            
+        if epoch % 5 == 0 and epoch >= start_eval:    
+            print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
+        elif epoch % 5 == 0:
+            print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
+            #if time.time() - params['t0'] > TRAIN_TIMEOUT:
+            #    print("Training time exceeded. Returning low accuracy.")
+            #    return 0.0
+
+    return train_loss, validation_loss, best_accuracy
 
 # Define a function for validation
 def validate_model(model:torch.nn.Module, criterion:torch.nn.Module, 
@@ -131,8 +172,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     params['model_net'] = model_net
     params['net_list'] = net_list
 
-    # Training time start counting here.
-    params['t0'] = time.time()
+
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -152,32 +192,18 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'],weight_decay=params['weight_decay'])
 
-    total_epochs = params['max_epochs']
-    train_epochs_without_validation = total_epochs - params['epochs_to_eval']
-    best_accuracy = 0.0
+    #total_epochs = params['max_epochs']
+    #train_epochs_without_validation = total_epochs - params['epochs_to_eval']
+    #best_accuracy = 0.0
     
-    # Train the model for 45 epochs without validation
-    for epoch in tqdm(range(1, train_epochs_without_validation + 1), desc="Training without validation"):
-        train_loss = train_model(model_net, criterion, optimizer, train_loader, device)
-        if epoch % 5 == 0:
-            print(f"Epoch [{epoch}/{total_epochs}] - Training loss: {train_loss}")
-            if time.time() - params['t0'] > TRAIN_TIMEOUT:
-                print("Training time exceeded. Returning low accuracy.")
-                return 0.0
-            
-    # Train the model for 5 epochs with validation
-    for epoch in tqdm(range(train_epochs_without_validation, total_epochs), desc="Training with validation"):
-        train_loss = train_model(model_net, criterion, optimizer, train_loader, device)
-        
-        if epoch >= train_epochs_without_validation:
-            val_loss, accuracy = validate_model(model_net, criterion, val_loader, device)
-            print(f"Epoch [{epoch+1}/{total_epochs}] - Training loss: {train_loss} - Validation loss: {val_loss} - Validation accuracy: {accuracy}%")
-            
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                create_info_file(model_path, {'best_accuracy': best_accuracy})
-                torch.save(model_net.state_dict(), best_model_path)
+    # Training time start counting here.
+    #params['t0'] = time.time()
     
-    params['t1'] = time.time()
+    # Train the model in fitness scheme
+    
+    _, _, best_accuracy = train_fitness_scheme(model_net, criterion, optimizer, train_loader, val_loader, 
+                                                            params['max_epochs'], params['epochs_to_eval'], device)
+
+    #params['t1'] = time.time()
     
     return best_accuracy
