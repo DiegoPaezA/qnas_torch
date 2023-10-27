@@ -36,13 +36,14 @@ def train_model(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torc
     total_loss = 0.0
 
     for inputs, labels in train_loader:
-        optimizer.zero_grad()
+        
         inputs, labels = inputs.to(device), labels.to(device)
         y_logits = model(inputs)
         loss = criterion(y_logits, labels)
+        total_loss += loss.item()
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        total_loss += loss.item()
 
     return total_loss / len(train_loader)
 
@@ -70,6 +71,7 @@ def validate_model(model:torch.nn.Module, criterion:torch.nn.Module,
             y_logits = model(inputs)
             loss = criterion(y_logits, labels)
             validation_loss += loss.item()
+            
             _, predicted = y_logits.max(1)
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
