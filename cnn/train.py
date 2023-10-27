@@ -37,8 +37,9 @@ def train_fitness_scheme(model:torch.nn.Module, criterion:torch.nn.Module, optim
     start_eval = max_epochs - epochs_to_eval
     validation_loss = 0.0
     accuracy = 0.0
+    best_accuracy = 0.0
     
-    for epoch in tqdm(range(1, max_epochs + 1), desc="Training"):
+    for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
         model.train()
         train_loss = 0.0
 
@@ -78,7 +79,7 @@ def train_fitness_scheme(model:torch.nn.Module, criterion:torch.nn.Module, optim
         # update training loss for the epoch
         train_loss /= len(train_loader)
             
-        if epoch % 5 == 0 and epoch >= start_eval:    
+        if epoch % 1 == 0 and epoch >= start_eval:    
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
         elif epoch % 5 == 0:
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
