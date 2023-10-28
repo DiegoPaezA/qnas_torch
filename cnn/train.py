@@ -64,8 +64,10 @@ def train(model, criterion, optimizer, train_loader, val_loader, params, device)
         optimizer: Optimization algorithm.
         train_loader: DataLoader for the training set.
         val_loader: DataLoader for the validation set.
-        max_epochs: Number of epochs to train.
-        epochs_to_eval: Number of epochs before starting validation.
+        params: Dictionary with parameters necessary for training
+            - max_epochs: Number of epochs to train.
+            - epochs_to_eval: Number of epochs before starting validation.
+            - t0: Time when the training started.
         device: Device to run the training on (CPU or GPU).
 
     Returns:
@@ -100,7 +102,7 @@ def train(model, criterion, optimizer, train_loader, val_loader, params, device)
             if epoch % 1 == 0:
                 print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
-        if epoch % 1 == 0 and epoch < start_eval:
+        if epoch % 5 == 0 and epoch < start_eval:
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
             
     return training_losses, validation_losses, best_accuracy
@@ -181,8 +183,8 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     
     # Train the model in fitness scheme
     
-    _, _, best_accuracy = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
+    train_loss_history, val_loss_history, best_accuracy = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
 
     params['t1'] = time.time()
     
-    return best_accuracy
+    return best_accuracy, train_loss_history, val_loss_history
