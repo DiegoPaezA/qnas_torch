@@ -91,7 +91,7 @@ def train(model, criterion, optimizer, train_loader, val_loader, params, device)
             print("Timeout reached")
             return training_losses, validation_losses, 0.0
         
-        if epoch >= start_eval:
+        if epoch > start_eval:
             validation_loss, accuracy = evaluate(model, criterion, val_loader, device)
             validation_losses.append(validation_loss)
 
