@@ -82,6 +82,7 @@ def train(model, criterion, optimizer, train_loader, val_loader, params, device)
     max_epochs = params['max_epochs']
     epochs_to_eval = params['epochs_to_eval']
     start_eval = max_epochs - epochs_to_eval
+    best_model_path = os.path.join(params['model_path'], 'best_model.pth')
 
     for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
         train_loss = train_epoch(model, criterion, optimizer, train_loader, device)
@@ -97,7 +98,8 @@ def train(model, criterion, optimizer, train_loader, val_loader, params, device)
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                # Save the model and the accuracy value
+                torch.save(model.state_dict(), best_model_path)
+                create_info_file(params['model_path'], {'best_accuracy': best_accuracy})
 
             if epoch % 1 == 0:
                 print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
@@ -128,7 +130,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     if not os.path.exists(model_path):
         os.makedirs(model_path)
         
-    best_model_path = os.path.join(model_path, 'best_model.pth')
+    params['model_path'] = model_path
     
     if params['limit_data']:
         limit_data = params['limit_data_value']
