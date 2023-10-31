@@ -50,13 +50,13 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     val_loader: torch.utils.data.DataLoader
     test_loader: torch.utils.data.DataLoader
   """
+  error_msg = "[!] train_split should be in the range [0, 1]."
+  assert ((train_split >= 0) and (train_split <= 1)), error_msg
   
   if seed is None:
     seed = int(time())
     random.seed(seed)
     torch.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
     
   file_path = os.path.join(data_path, 'data_info.txt')
   file_exists = util.check_file_exists(file_path)
@@ -87,30 +87,49 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
         Normalize(mean=mean, std=std)
       ])
   
+  if data_aug:
+    pad = 4
+    train_transform = Compose([
+      Resize((height + pad, width + pad)),
+      RandomCrop((height, width)),
+      RandomHorizontalFlip(),
+      ToTensor(),
+      Normalize(mean=mean, std=std)
+    ])
+  else:
+    train_transform = Compose([
+        ToTensor(),
+        Normalize(mean=mean, std=std)
+      ])
+  
+  
   # Load CIFAR-10 dataset
-  train_dataset_raw = CIFAR10(data_path, train=True, download=True, transform=transform)
+  train_dataset = CIFAR10(data_path, train=True, download=True, transform=train_transform)
+  valid_dataset = CIFAR10(data_path, train=True, download=True, transform=transform)
   test_dataset = CIFAR10(data_path, train=False, download=True, transform=transform)
   
   if not for_train:
     test_loader = DataLoader(
-    test_dataset,
-    batch_size=batch_size,
-    num_workers=num_workers,
-    pin_memory=True)
+      test_dataset,
+      batch_size=batch_size,
+      num_workers=num_workers,
+      shuffle=False,
+      pin_memory=True)
     print("All set for testing!")
     return test_loader
   
   # Split train_dataset into train and validation
   val_split = 1 - train_split
+  num_train = len(train_dataset)
+  indices = list(range(num_train))
+  split = int(np.floor(val_split * num_train)) + 1
   
-  # Create train and validation indices using stratified sampling
-  labels = np.array(train_dataset_raw.targets)
-  splitter = StratifiedShuffleSplit(n_splits=1, test_size=val_split)
-  train_indices, val_indices = next(splitter.split(labels, labels)) 
-
-  total_train_samples = len(train_indices)
+  np.random.shuffle(indices)
+  train_indices, val_indices = indices[split:], indices[:split]
   
-  if limit_data is not None and limit_data < total_train_samples:
+  
+  
+  if limit_data is not None and limit_data < num_train:
     train_samples = int(train_split * limit_data)
     val_samples = int(limit_data - train_samples)
     
@@ -129,47 +148,38 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     
     # Iterate through the training indices to limit the number of samples per class
     for idx in train_indices:
-      _, target = train_dataset_raw[idx]
+      _, target = train_dataset[idx]
       if not train_samples_per_class[target] >= max_samples_per_class_train:
           train_indices_limited.append(idx)
           train_samples_per_class[target] += 1
 
     # Iterate through the validation indices to limit the number of samples per class
     for idx in val_indices:
-      _, target = train_dataset_raw[idx]
+      _, target = valid_dataset[idx]
       if not val_samples_per_class[target] >= max_samples_per_class_val:
         val_indices_limited.append(idx)
         val_samples_per_class[target] += 1
-
+    #print(len(train_indices_limited)), print(len(val_indices_limited))
     # Create Subset objects using the limited indices
-    train_dataset = Subset(train_dataset_raw, train_indices_limited)
-    val_dataset = Subset(train_dataset_raw, val_indices_limited)
+    train_dataset = Subset(train_dataset, train_indices_limited)
+    valid_dataset = Subset(valid_dataset, val_indices_limited)
+
   else:
-    train_dataset = Subset(train_dataset_raw, train_indices)
-    val_dataset = Subset(train_dataset_raw, val_indices)
-    
-  if data_aug:
-    pad = 4
-    train_transform = Compose([
-      Resize((height + pad, width + pad)),
-      RandomCrop((height, width)),
-      RandomHorizontalFlip()
-    ])
-    train_subset = [(train_transform(sample), target) for sample, target in train_dataset]
-  else:
-    train_subset = train_dataset
-  
+    train_dataset = Subset(train_dataset, train_indices)
+    valid_dataset = Subset(valid_dataset, val_indices)
+      
   train_loader = DataLoader(
-      train_subset,
+      train_dataset,
       batch_size=batch_size,
       num_workers=num_workers,
-      pin_memory=True,
-      shuffle=True)
+      shuffle=True,
+      pin_memory=True)
   
   val_loader = DataLoader(
-      val_dataset,
+      valid_dataset,
       batch_size=batch_size,
       num_workers=num_workers,
+      shuffle=False,
       pin_memory=True)
   
   
@@ -178,7 +188,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
   info_dict['seed'] = seed
   
   info_dict['train_records'] = len(train_dataset)
-  info_dict['valid_records'] = len(val_dataset)
+  info_dict['valid_records'] = len(valid_dataset)
   info_dict['test_records'] = len(test_dataset)
   
   info_dict['shape'] = [channels, height, width]
