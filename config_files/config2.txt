@@ -36,12 +36,12 @@ train:
     batch_size: 256
     eval_batch_size: 0
     max_epochs: 50
-    epochs_to_eval: 5
+    epochs_to_eval: 49
     optimizer: RMSProp
 
     # Dataset
     dataset: Cifar10
-    data_augmentation: False
+    data_augmentation: True
     subtract_mean: True
     limit_data: True
     limit_data_value: 10000
