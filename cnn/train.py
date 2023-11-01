@@ -54,7 +54,9 @@ def evaluate(model, criterion, data_loader, device):
 
     return validation_loss, accuracy
 
-def train(model, criterion, optimizer, train_loader, val_loader, params, device):
+def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer, 
+          train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
+          params:Dict, device:torch.device) -> Tuple[List[float], List[float], float]:
     """
     Train a neural network model.
 
@@ -75,7 +77,7 @@ def train(model, criterion, optimizer, train_loader, val_loader, params, device)
         validation_losses: List of validation losses for each epoch.
         best_accuracy: Best validation accuracy achieved.
     """
-    model.train()
+    #model.train()
     training_losses = []
     validation_losses = []
     best_accuracy = 0.0
@@ -165,7 +167,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Load the model_net to the GPU
-    inputs, labels = next(iter(train_loader))
+    inputs, _ = next(iter(train_loader))
     _ = model_net(inputs)
     model_net.to(device)
     
