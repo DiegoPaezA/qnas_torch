@@ -43,7 +43,7 @@ train:
     dataset: Cifar10
     data_augmentation: True
     subtract_mean: True
-    limit_data: True
+    limit_data: False
     limit_data_value: 10000
 
     # Tensorflow
