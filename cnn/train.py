@@ -164,7 +164,7 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
 
 
     
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = params['device']
     
     # Load the model_net to the GPU
     inputs, _ = next(iter(train_loader))
