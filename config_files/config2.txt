@@ -38,6 +38,7 @@ train:
     max_epochs: 50
     epochs_to_eval: 49
     optimizer: RMSProp
+    device: cuda:0
 
     # Dataset
     dataset: Cifar10
