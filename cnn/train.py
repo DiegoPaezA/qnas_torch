@@ -77,7 +77,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
         validation_losses: List of validation losses for each epoch.
         best_accuracy: Best validation accuracy achieved.
     """
-    #model.train()
+    model.train()
     training_losses = []
     validation_losses = []
     best_accuracy = 0.0
