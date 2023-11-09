@@ -32,6 +32,23 @@ cifar100_info = {
   'num_classes': 100
 }
 
+# Function to balance the dataset by class
+def balance_dataset(dataset, indices, max_samples_per_class):
+    class_samples = defaultdict(int)
+    balanced_indices = []
+
+    random.shuffle(indices)
+
+    for idx in indices:
+        _, target = dataset[idx]
+        if class_samples[target] < max_samples_per_class:
+            balanced_indices.append(idx)
+            class_samples[target] += 1
+            if len(balanced_indices) == max_samples_per_class * len(set(class_samples.values())):
+                break
+
+    return balanced_indices
+
 def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size=1000,limit_data=None,
                    seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=4):
   """
@@ -145,24 +162,9 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
     train_indices_limited = []
     val_indices_limited = []
 
-    random.shuffle(train_indices)
-    random.shuffle(val_indices)
-    
-    # Iterate through the training indices to limit the number of samples per class
-    for idx in train_indices:
-      _, target = train_dataset[idx]
-      if not train_samples_per_class[target] >= max_samples_per_class_train:
-          train_indices_limited.append(idx)
-          train_samples_per_class[target] += 1
+    train_indices_limited = balance_dataset(train_dataset, train_indices, max_samples_per_class_train)
+    val_indices_limited = balance_dataset(valid_dataset, val_indices, max_samples_per_class_val)
 
-    # Iterate through the validation indices to limit the number of samples per class
-    for idx in val_indices:
-      _, target = valid_dataset[idx]
-      if not val_samples_per_class[target] >= max_samples_per_class_val:
-        val_indices_limited.append(idx)
-        val_samples_per_class[target] += 1
-    #print(len(train_indices_limited)), print(len(val_indices_limited))
-    # Create Subset objects using the limited indices
     train_dataset = Subset(train_dataset, train_indices_limited)
     valid_dataset = Subset(valid_dataset, val_indices_limited)
 
