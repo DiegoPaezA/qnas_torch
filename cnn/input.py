@@ -155,13 +155,6 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
     max_samples_per_class_train = train_samples/10
     max_samples_per_class_val = val_samples/10
 
-    # Create a dictionary to track the number of samples per class
-    train_samples_per_class = defaultdict(int)
-    val_samples_per_class = defaultdict(int)
-    
-    train_indices_limited = []
-    val_indices_limited = []
-
     train_indices_limited = balance_dataset(train_dataset, train_indices, max_samples_per_class_train)
     val_indices_limited = balance_dataset(valid_dataset, val_indices, max_samples_per_class_val)
 
