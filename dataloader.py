@@ -68,18 +68,13 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     channels,height,width  = cifar10_info['shape']
   else:
     # Calculate mean and standard deviation from the entire dataset
-    dataset = CIFAR10(data_path, download=True, transform=ToTensor())
+    dataset = CIFAR10(data_path, download=True,train=True, transform=ToTensor())
     loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
-    mean = torch.zeros(3)
-    std = torch.zeros(3)
-    
-    for images, _ in loader:
-        mean += torch.mean(images, dim=(0, 2, 3))
-        std += torch.std(images, dim=(0, 2, 3))
-    mean /= len(loader)
-    std /= len(loader)
-    mean = mean.tolist()
-    std = std.tolist()
+
+    data = next(iter(loader))
+    mean = data[0].mean(dim=(0, 2, 3)).tolist()    # Calculate mean for each channel
+    std = data[0].std(dim=(0, 2, 3)).tolist()      # Calculate std for each channel
+
     channels,height,width = dataset[0][0].shape
       
   transform = Compose([
