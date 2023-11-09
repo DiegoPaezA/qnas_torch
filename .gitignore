@@ -112,3 +112,6 @@ ENV/
 # Dataset files
 cifar10_data/
 cifar100_data/
+
+# Results
+my_exp_config2/
