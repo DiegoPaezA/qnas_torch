@@ -32,7 +32,7 @@ cifar100_info = {
   'num_classes': 100
 }
 
-def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
+def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size=1000,limit_data=None,
                    seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=4):
   """
   This function creates a dataloader for the CIFAR10 dataset.
@@ -80,16 +80,9 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
     # Calculate mean and standard deviation from the entire dataset
     dataset = CIFAR10(data_path, download=True, transform=ToTensor())
     loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
-    mean = torch.zeros(3)
-    std = torch.zeros(3)
-    
-    for images, _ in loader:
-        mean += torch.mean(images, dim=(0, 2, 3))
-        std += torch.std(images, dim=(0, 2, 3))
-    mean /= len(loader)
-    std /= len(loader)
-    mean = mean.tolist()
-    std = std.tolist()
+    data = next(iter(loader))
+    mean = data[0].mean(dim=(0, 2, 3)).tolist()    # Calculate mean for each channel
+    std = data[0].std(dim=(0, 2, 3)).tolist()      # Calculate std for each channel
     channels,height,width = dataset[0][0].shape
       
   transform = Compose([
@@ -186,7 +179,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
   
   val_loader = DataLoader(
       valid_dataset,
-      batch_size=batch_size,
+      batch_size=eval_batch_size,
       num_workers=num_workers,
       shuffle=False,
       pin_memory=True)
@@ -259,16 +252,9 @@ def CIFAR100_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None
     # Calculate mean and standard deviation from the entire dataset
     dataset = CIFAR100(data_path, download=True, transform=ToTensor())
     loader = DataLoader(dataset, batch_size=len(dataset), num_workers=num_workers, shuffle=False)
-    mean = torch.zeros(3)
-    std = torch.zeros(3)
-    
-    for images, _ in loader:
-        mean += torch.mean(images, dim=(0, 2, 3))
-        std += torch.std(images, dim=(0, 2, 3))
-    mean /= len(loader)
-    std /= len(loader)
-    mean = mean.tolist()
-    std = std.tolist()
+    data = next(iter(loader))
+    mean = data[0].mean(dim=(0, 2, 3)).tolist()    # Calculate mean for each channel
+    std = data[0].std(dim=(0, 2, 3)).tolist()      # Calculate std for each channel
     channels,height,width = dataset[0][0].shape
       
   transform = Compose([
