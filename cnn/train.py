@@ -21,6 +21,8 @@ TRAIN_TIMEOUT = 5400
 def train_epoch(model, criterion, optimizer, data_loader, device):
     model.train()
     train_loss = 0.0
+    correct = 0
+    total = 0
 
     for inputs, labels in data_loader:
         inputs, labels = inputs.to(device), labels.to(device)
@@ -30,8 +32,13 @@ def train_epoch(model, criterion, optimizer, data_loader, device):
         loss.backward()
         optimizer.step()
         train_loss += loss.item()
-
-    return train_loss / len(data_loader)
+        _, predicted = y_logits.max(1)
+        total += labels.size(0)
+        correct += predicted.eq(labels).sum().item()
+        
+    accuracy = 100 * correct / total
+    train_loss /= len(data_loader)
+    return train_loss, accuracy
 
 def evaluate(model, criterion, data_loader, device):
     model.eval()
@@ -56,7 +63,7 @@ def evaluate(model, criterion, data_loader, device):
 
 def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer, 
           train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
-          params:Dict, device:torch.device) -> Tuple[List[float], List[float], float]:
+          params:Dict, device:torch.device) -> Dict:
     """
     Train a neural network model.
 
@@ -73,22 +80,27 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
         device: Device to run the training on (CPU or GPU).
 
     Returns:
+
         training_losses: List of training losses for each epoch.
         validation_losses: List of validation losses for each epoch.
         best_accuracy: Best validation accuracy achieved.
     """
     model.train()
     training_losses = []
+    training_accuracies = []
     validation_losses = []
+    validation_accuracies = []
     best_accuracy = 0.0
+    training_results = {}
     max_epochs = params['max_epochs']
     epochs_to_eval = params['epochs_to_eval']
     start_eval = max_epochs - epochs_to_eval
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
 
     for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
-        train_loss = train_epoch(model, criterion, optimizer, train_loader, device)
+        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
         training_losses.append(train_loss)
+        training_accuracies.append(train_accuracy)
 
         if epoch < start_eval and (time.time() - params['t0']) > TRAIN_TIMEOUT:
             print("Timeout reached")
@@ -97,6 +109,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
         if epoch > start_eval:
             validation_loss, accuracy = evaluate(model, criterion, val_loader, device)
             validation_losses.append(validation_loss)
+            validation_accuracies.append(accuracy)
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
@@ -108,8 +121,13 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 
         if epoch % 5 == 0 and epoch < start_eval:
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
-            
-    return training_losses, validation_losses, best_accuracy
+    
+    training_results['training_losses'] = training_losses
+    training_results['training_accuracies'] = training_accuracies
+    training_results['validation_losses'] = validation_losses
+    training_results['validation_accuracies'] = validation_accuracies
+    training_results['best_accuracy'] = best_accuracy        
+    return training_results
 
 
 def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
@@ -148,7 +166,8 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         train_loader, val_loader = input.CIFAR10_loader(data_path, limit_data=limit_data,
                                                         for_train=True, 
                                                         data_aug=params['data_augmentation'],
-                                                        batch_size=params['batch_size'])
+                                                        batch_size=params['batch_size'],
+                                                        eval_batch_size=params['eval_batch_size'])
         
     elif params['dataset'] == 'Cifar100':
         data_info = input.cifar100_info
@@ -177,7 +196,8 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
         #                             momentum=params['momentum'], weight_decay=params['weight_decay'],
         #                             alpha=params['decay'])
-        optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'])
+        #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'])
+        optimizer = torch.optim.RMSprop(model_net.parameters())
     else:
         optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'],weight_decay=params['weight_decay'])
@@ -187,8 +207,8 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     
     # Train the model in fitness scheme
     
-    train_loss_history, val_loss_history, best_accuracy = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
+    results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
 
     params['t1'] = time.time()
     
-    return best_accuracy, train_loss_history, val_loss_history
+    return results_dict
