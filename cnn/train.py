@@ -198,6 +198,10 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
         #                             alpha=params['decay'])
         #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'])
         optimizer = torch.optim.RMSprop(model_net.parameters())
+    elif params['optimizer'] == 'Adam':
+        optimizer = torch.optim.Adam(model_net.parameters())
+    elif params['optimizer'] == 'AdamW':
+        optimizer = torch.optim.AdamW(model_net.parameters())
     else:
         optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
                                     momentum=params['momentum'],weight_decay=params['weight_decay'])
