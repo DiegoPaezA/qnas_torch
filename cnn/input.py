@@ -14,7 +14,7 @@ from collections import defaultdict
 from sklearn.model_selection import StratifiedShuffleSplit
 from torchvision.datasets import CIFAR10, CIFAR100
 from torch.utils.data import DataLoader, Subset, random_split
-from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, RandomHorizontalFlip, Normalize
+from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, RandomHorizontalFlip, Normalize, TrivialAugmentWide
 
 cifar10_info = {
   'dataset': 'CIFAR10',
@@ -113,6 +113,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
       Resize((height + pad, width + pad)),
       RandomCrop((height, width)),
       RandomHorizontalFlip(),
+      #TrivialAugmentWide(num_magnitude_bins=31), # how intense
       ToTensor(),
       Normalize(mean=mean, std=std)
     ])
