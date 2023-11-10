@@ -105,7 +105,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=24,limit_data=None,
       Resize((height + pad, width + pad)),
       RandomCrop((height, width)),
       #RandomHorizontalFlip(),
-      TrivialAugmentWide(num_magnitude_bins=15)
+      TrivialAugmentWide(num_magnitude_bins=15),
       ToTensor(),
       Normalize(mean=mean, std=std)
     ])
