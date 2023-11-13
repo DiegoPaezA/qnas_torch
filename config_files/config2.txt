@@ -35,8 +35,8 @@ QNAS:
 train:
     batch_size: 256
     eval_batch_size: 1000
-    max_epochs: 50
-    epochs_to_eval: 5
+    max_epochs: 100
+    epochs_to_eval: 10
     #optimizer: RMSProp
     optimizer: AdamW
     device: cuda:0
