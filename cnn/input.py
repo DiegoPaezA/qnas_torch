@@ -113,7 +113,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
       Resize((height + pad, width + pad)),
       RandomCrop((height, width)),
       #RandomHorizontalFlip(),
-      TrivialAugmentWide(num_magnitude_bins=15), # how intense
+      TrivialAugmentWide(num_magnitude_bins=31), # how intense
       ToTensor(),
       Normalize(mean=mean, std=std)
     ])
@@ -132,7 +132,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
   if not for_train:
     test_loader = DataLoader(
       test_dataset,
-      batch_size=batch_size,
+      batch_size=eval_batch_size,
       num_workers=num_workers,
       shuffle=False,
       pin_memory=True)
