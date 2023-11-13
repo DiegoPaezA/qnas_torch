@@ -88,6 +88,10 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
   file_path = os.path.join(data_path, 'data_info.txt')
   file_exists = util.check_file_exists(file_path)
   
+  download_status = False
+  if not os.path.exists(data_path):
+    download_status = True
+  
   if info is None and file_exists:
     #print("Loading info locally")
     mean = cifar10_info['mean']
@@ -125,9 +129,9 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
   
   
   # Load CIFAR-10 dataset
-  train_dataset = CIFAR10(data_path, train=True, download=True, transform=train_transform)
-  valid_dataset = CIFAR10(data_path, train=True, download=True, transform=transform)
-  test_dataset = CIFAR10(data_path, train=False, download=True, transform=transform)
+  train_dataset = CIFAR10(data_path, train=True, download=download_status, transform=train_transform)
+  valid_dataset = CIFAR10(data_path, train=True, download=download_status, transform=transform)
+  test_dataset = CIFAR10(data_path, train=False, download=download_status, transform=transform)
   
   if not for_train:
     test_loader = DataLoader(
@@ -136,7 +140,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
       num_workers=num_workers,
       shuffle=False,
       pin_memory=True)
-    print("All set for testing!")
+    print("Dataloader ready for testing!")
     return test_loader
   
   # Split train_dataset into train and validation
@@ -196,7 +200,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
   
   util.create_info_file(out_path=data_path, info_dict=info_dict)
   
-  print("All set for training!")
+  print("Dataloader ready for Training!")
   
   return train_loader, val_loader
 
