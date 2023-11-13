@@ -43,15 +43,15 @@ def load_pkl(file_path):
 
     return file
 
-def create_info_file(out_path, info_dict):
+def create_info_file(out_path, info_dict, file_name='data_info.txt'):
     """ Saves info in *info_dict* in a txt file.
 
     Args:
         out_path: (str) path to the directory where to save info file.
         info_dict: dict with all relevant info the user wants to save in the info file.
     """
-
-    with open(os.path.join(out_path, 'data_info.txt'), 'w') as f:
+    
+    with open(os.path.join(out_path, file_name), 'w') as f:
         yaml.dump(info_dict, f)
         
 def check_file_exists(file_path):
