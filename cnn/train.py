@@ -12,9 +12,10 @@ import torch
 import torch.nn as nn
 from tqdm.notebook import tqdm
 from cnn.metrics import *
-from typing import Tuple, Dict, List
+from typing import Dict, List, Union, Any
 from cnn import model, input
 from util import create_info_file
+
 
 TRAIN_TIMEOUT = 5400
 
@@ -80,10 +81,11 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
         device: Device to run the training on (CPU or GPU).
 
     Returns:
-
-        training_losses: List of training losses for each epoch.
-        validation_losses: List of validation losses for each epoch.
-        best_accuracy: Best validation accuracy achieved.
+        training_results: Dictionary with the training results.
+        
+            -training_losses: List of training losses for each epoch.
+            -validation_losses: List of validation losses for each epoch.
+            -best_accuracy: Best validation accuracy achieved.
     """
     model.train()
     training_losses = []
@@ -104,7 +106,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 
         if epoch < start_eval and (time.time() - params['t0']) > TRAIN_TIMEOUT:
             print("Timeout reached")
-            return training_losses, validation_losses, 0.0
+            raise TimeoutError()
         
         if epoch > start_eval:
             validation_loss, accuracy = evaluate(model, criterion, val_loader, device)
@@ -114,13 +116,17 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
                 torch.save(model.state_dict(), best_model_path)
-                create_info_file(params['model_path'], {'best_accuracy': best_accuracy})
+                create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
 
             if epoch % 1 == 0:
                 print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
         if epoch % 5 == 0 and epoch < start_eval:
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
+            
+    params['t1'] = time.time()
+    
+    create_info_file(params['model_path'], params, 'training_params.txt')
     
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
@@ -130,19 +136,32 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     return training_results
 
 
-def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
-    """ Train and evaluate a model_net using evolved parameters.
+def fitness_calculation(id_num: str,
+                        params: Dict[str, Any], 
+                        fn_dict: Dict[str, Any], 
+                        net_list: List[str]) -> Dict[str, Union[List[float], float]]:
+    """Train and evaluate a model using evolved hyperparameters.
+
+    This function trains and evaluates a convolutional neural network model using the specified
+    configuration and evolved hyperparameters.
 
     Args:
-        id_num: string identifying the generation number and the individual number.
-        data_info: dictionary with information about the dataset (number of classes, etc.).
-        params: dictionary with parameters necessary for training, including the evolved
-            hyperparameters.
-        fn_dict: dict with definitions of the possible layers (name and parameters).
-        net_list: list with names of layers defining the network, in the order they appear.
+        id_num (str): A string identifying the generation number and the individual number.
+        params (Dict[str, Any]): A dictionary with parameters necessary for training, including
+            the evolved hyperparameters.
+        fn_dict (Dict[str, Any]): A dictionary with definitions of the possible layers, including
+            their names and parameters.
+        net_list (List[str]): A list with names of layers defining the network, in the order they appear.
 
     Returns:
-        accuracy of the model_net for the validation set.
+        Dict[str, Union[List[float], float]]: A dictionary containing the training results.
+
+        - 'training_losses' (List[float]): List of training losses for each epoch.
+        - 'validation_losses' (List[float]): List of validation losses for each epoch.
+        - 'best_accuracy' (float): Best validation accuracy achieved.
+
+    Raises:
+        TimeoutError: If the training process takes too long to complete.
     """
 
 
@@ -210,9 +229,12 @@ def fitness_calculation(id_num, data_info, params, fn_dict, net_list):
     params['t0'] = time.time()
     
     # Train the model in fitness scheme
-    
-    results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
-
-    params['t1'] = time.time()
+    try:
+        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
+        
+    except TimeoutError:
+        results_dict = {'best_accuracy': 0.0}
+        
+        return results_dict
     
     return results_dict
