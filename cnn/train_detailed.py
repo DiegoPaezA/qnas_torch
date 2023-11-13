@@ -168,14 +168,12 @@ def train(model: torch.nn.Module,
 def train_and_eval(params: Dict[str, Any], 
                     fn_dict: Dict[str, Any], 
                     net_list: List[str]) -> Dict[str, Union[List[float], float]]:
-    """Train and evaluate a model using evolved hyperparameters.
-
-    This function trains and evaluates a convolutional neural network model using the specified
-    configuration and evolved hyperparameters.
+    """
+    This function retrains and evaluates a convolutional neural network model using the specified
+    configuration.
 
     Args:
-        params (Dict[str, Any]): A dictionary with parameters necessary for training, including
-            the evolved hyperparameters.
+        params (Dict[str, Any]): A dictionary with parameters necessary for training, including.
         fn_dict (Dict[str, Any]): A dictionary with definitions of the possible layers, including
             their names and parameters.
         net_list (List[str]): A list with names of layers defining the network, in the order they appear.
