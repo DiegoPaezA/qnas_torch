@@ -222,8 +222,7 @@ def fitness_calculation(id_num: str,
     elif params['optimizer'] == 'AdamW':
         optimizer = torch.optim.AdamW(model_net.parameters())
     else:
-        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], 
-                                    momentum=params['momentum'],weight_decay=params['weight_decay'])
+        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'])
 
     # Training time start counting here.
     params['t0'] = time.time()
