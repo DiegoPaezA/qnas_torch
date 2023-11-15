@@ -254,7 +254,7 @@ def train_and_eval(params: Dict[str, Any],
     elif params['optimizer'] == 'AdamW':
         optimizer = torch.optim.AdamW(model_net.parameters())
     else:
-        optimizer = torch.optim.SGD(model_net.parameters())
+        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'])
 
     # Training time start counting here.
     params['t0'] = time.time()
