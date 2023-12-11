@@ -20,6 +20,18 @@ from util import create_info_file
 
 TRAIN_TIMEOUT = 5400
 
+def realese_gpu_memory(gpu_name='cuda:0'):
+    """
+    Release GPU memory.
+    """
+    # Set the device to GPU named "cuda:1"
+    torch.cuda.set_device(gpu_name)
+    torch.cuda.empty_cache()
+
+    # Print memory statistics
+    #print(f"Allocated GPU memory: {torch.cuda.memory_allocated() / (1024 ** 3):.2f} GB")
+    #print(f"Reserved GPU memory: {torch.cuda.memory_reserved() / (1024 ** 3):.2f} GB")
+
 def compute_confusion_matrix(model, data_loader, device):
     model.eval()
     all_labels = []
@@ -130,7 +142,7 @@ def train(model: torch.nn.Module,
 
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
 
-    for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
+    for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
         training_losses.append(train_loss)
         training_accuracies.append(train_accuracy)
@@ -148,6 +160,8 @@ def train(model: torch.nn.Module,
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
     test_loss, test_accuracy, confusion_matrix = evaluate(model, criterion, test_loader, device, test=True)
+    
+    print(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
             
     params['t1'] = time.time()
     
@@ -240,13 +254,14 @@ def train_and_eval(params: Dict[str, Any],
     elif params['optimizer'] == 'AdamW':
         optimizer = torch.optim.AdamW(model_net.parameters())
     else:
-        optimizer = torch.optim.SGD(model_net.parameters())
+        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'])
 
     # Training time start counting here.
     params['t0'] = time.time()
     
-    # Train the model in fitness scheme
-    
+    # Train the model in retreining mode
     results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params, device)
+    
+    realese_gpu_memory(gpu_name=params['device'])
     
     return results_dict

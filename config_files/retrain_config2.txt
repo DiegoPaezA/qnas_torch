@@ -35,7 +35,7 @@ QNAS:
 train:
     batch_size: 256
     eval_batch_size: 1000
-    test_batch_size: 10000
+    test_batch_size: 1000
     max_epochs: 300
     epochs_to_eval: 0
     optimizer: AdamW
