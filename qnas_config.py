@@ -103,6 +103,7 @@ class ConfigParameters(object):
                                ('max_epochs', int),
                                ('epochs_to_eval', int),
                                ('optimizer', str),
+                               ('device', str),
                                ('dataset', str),
                                ('data_augmentation', bool),
                                ('subtract_mean', bool),
@@ -125,18 +126,6 @@ class ConfigParameters(object):
         if config_file['train']['epochs_to_eval'] >= config_file['train']['max_epochs']:
             raise ValueError('Invalid epochs_to_eval! It should be < max_epochs.')
 
-    def _calculate_step_params(self):
-        """ Calculate the step version of epoch based parameters and add to *self.train_spec*.
-        """
-
-        self.train_spec['steps_per_epoch'] = int(
-                self.data_info.num_train_ex / self.train_spec['batch_size'])
-        self.train_spec['max_steps'] = int(
-                self.train_spec['max_epochs'] * self.train_spec['steps_per_epoch'])
-        self.train_spec['save_checkpoints_steps'] = int(
-                self.train_spec['save_checkpoints_epochs'] * self.train_spec['steps_per_epoch'])
-        self.train_spec['save_summary_steps'] = int(
-                self.train_spec['save_summary_epochs'] * self.train_spec['steps_per_epoch'])
 
     def _get_evolution_params(self):
         """ Get specific parameters for the evolution phase. """
@@ -245,24 +234,6 @@ class ConfigParameters(object):
                                                           self.args['retrain_folder'])
         del self.args['retrain_folder']
 
-    def _get_common_params(self):
-        """ Get parameters that are combined/calculated the same way for all phases. """
-
-        self.train_spec['data_path'] = self.args['data_path']
-        self.data_info = self.get_data_info()
-
-        if not self.train_spec['eval_batch_size']:
-            self.train_spec['eval_batch_size'] = self.data_info.num_valid_ex
-
-        # Calculating parameters based on steps
-        self._calculate_step_params()
-
-        self.train_spec['phase'] = self.phase
-        self.train_spec['log_level'] = self.args['log_level']
-
-        self.files_spec['log_file'] = os.path.join(self.args['experiment_path'], 'log_QNAS.txt')
-        self.files_spec['data_file'] = os.path.join(self.args['experiment_path'],
-                                                    'data_QNAS.pkl')
 
     def get_parameters(self):
         """ Organize dicts combining the command-line and config_file parameters,
@@ -276,14 +247,6 @@ class ConfigParameters(object):
         else:
             self._get_retrain_params()
 
-        #self._get_common_params()
-
-    def get_data_info(self):
-        """ Get input.*Info object based on the name in *self.train_spec['dataset']*. """
-
-        name = self.train_spec['dataset'] + 'Info'
-
-        return getattr(input, name)(self.train_spec['data_path'], validation=True)
 
     def load_old_params(self):
         """ Load parameters from *self.files_spec['previous_QNAS_params']* and replace
