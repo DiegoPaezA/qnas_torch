@@ -37,7 +37,6 @@ train:
     eval_batch_size: 1000
     max_epochs: 100
     epochs_to_eval: 10
-    #optimizer: RMSProp
     optimizer: AdamW
     device: cuda:0
 
