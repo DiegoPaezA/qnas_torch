@@ -272,7 +272,7 @@ class MaxPooling(nn.Module):
             tensor = self.max_pool(inputs)
         else:
             #print("Warning: MaxPooling layer not applied because the image size is smaller than the kernel size")
-            return inputs.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+            return inputs
         
         if self.channels_last:
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
@@ -319,7 +319,8 @@ class AvgPooling(nn.Module):
             tensor = self.avg_pool(inputs)
         else:
             #print("Warning: AvgPooling layer not applied because the image size is smaller than the kernel size")
-            return inputs.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+            return inputs
+            #return inputs.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
         
         if self.channels_last:
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
@@ -455,7 +456,7 @@ class NetworkGraph(nn.Module):
         Returns:
             logits tensor.
         """
-        #print(f'inputs.shape: {inputs.shape}')
+        # print(f'inputs.shape: {inputs.shape}')
         if debug:
             for f in self.layers:
                 print(f'f: {f}')
