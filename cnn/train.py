@@ -139,7 +139,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 def fitness_calculation(id_num: str,
                         params: Dict[str, Any], 
                         fn_dict: Dict[str, Any], 
-                        net_list: List[str]) -> Dict[str, Union[List[float], float]]:
+                        net_list: List[str],
+                        debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
     This function trains and evaluates a convolutional neural network model using the specified
@@ -212,10 +213,6 @@ def fitness_calculation(id_num: str,
     criterion = nn.CrossEntropyLoss()
     
     if params['optimizer'] == 'RMSProp':
-        #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'], 
-        #                             momentum=params['momentum'], weight_decay=params['weight_decay'],
-        #                             alpha=params['decay'])
-        #optimizer = torch.optim.RMSprop(model_net.parameters(), lr=params['learning_rate'])
         optimizer = torch.optim.RMSprop(model_net.parameters())
     elif params['optimizer'] == 'Adam':
         optimizer = torch.optim.Adam(model_net.parameters())
@@ -230,10 +227,13 @@ def fitness_calculation(id_num: str,
     # Train the model in fitness scheme
     try:
         results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
+        if debug:
+            result = results_dict
+        else:
+            result = results_dict['best_accuracy']
         
     except TimeoutError:
-        results_dict = {'best_accuracy': 0.0}
-        
-        return results_dict
+        result = 0.0 # Penalize the model if it takes too long to train.
+        return result
     
-    return results_dict
+    return result
