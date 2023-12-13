@@ -126,7 +126,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             
     params['t1'] = time.time()
     
-    create_info_file(params['model_path'], params, 'training_params.txt')
+    #create_info_file(params['model_path'], params, 'training_params.txt')
     
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
@@ -204,6 +204,7 @@ def fitness_calculation(id_num: str,
 
     
     device = params['device']
+    print(f"Training model {id_num} on device {device} ...")
     
     # Load the model_net to the GPU
     inputs, _ = next(iter(train_loader))
