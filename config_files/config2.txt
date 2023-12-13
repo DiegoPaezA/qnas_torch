@@ -2,11 +2,11 @@
 
 QNAS:
     crossover_rate: 0.5
-    max_generations: 100
+    max_generations: 10
     max_num_nodes: 20
-    num_quantum_ind: 5
+    num_quantum_ind: 4
     penalize_number: 3
-    repetition: 4
+    repetition: 3
     replace_method: best
     update_quantum_gen: 5
     update_quantum_rate: 0.1
@@ -35,8 +35,8 @@ QNAS:
 train:
     batch_size: 256
     eval_batch_size: 1000
-    max_epochs: 100
-    epochs_to_eval: 10
+    max_epochs: 5
+    epochs_to_eval: 2 
     optimizer: AdamW
     device: cuda:0
 
@@ -44,7 +44,7 @@ train:
     dataset: Cifar10
     data_augmentation: True
     subtract_mean: True
-    limit_data: False
+    limit_data: True
     limit_data_value: 10000
 
     # Tensorflow
