@@ -11,7 +11,7 @@ from pickle import dump, HIGHEST_PROTOCOL
 import numpy as np
 
 from population import QPopulationNetwork, QPopulationParams
-from util import delete_old_dirs, init_log, load_pkl, ExtractData
+from util import delete_old_dirs, init_log, load_pkl
 
 
 class QNAS(object):
@@ -414,9 +414,9 @@ class QNAS(object):
 
         self.update_quantum()
 
-        self.save_data()
+        #self.save_data()
         self.log_data()
-        self.save_train_data()
+        #self.save_train_data()
 
         # Remove Tensorflow models files
         delete_old_dirs(self.experiment_path, keep_best=True,

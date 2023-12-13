@@ -234,7 +234,25 @@ class ConfigParameters(object):
                                                           self.args['retrain_folder'])
         del self.args['retrain_folder']
 
+    def _get_common_params(self):
+        """ Get parameters that are combined/calculated the same way for all phases. """
 
+        self.train_spec['data_path'] = self.args['data_path']
+        #self.data_info = self.get_data_info()
+
+        # if not self.train_spec['eval_batch_size']:
+        #     self.train_spec['eval_batch_size'] = self.data_info.num_valid_ex
+
+        # Calculating parameters based on steps
+        #self._calculate_step_params()
+
+        self.train_spec['phase'] = self.phase
+        self.train_spec['log_level'] = self.args['log_level']
+
+        self.files_spec['log_file'] = os.path.join(self.args['experiment_path'], 'log_QNAS.txt')
+        self.files_spec['data_file'] = os.path.join(self.args['experiment_path'],
+                                                    'data_QNAS.pkl')
+        
     def get_parameters(self):
         """ Organize dicts combining the command-line and config_file parameters,
             joining all the necessary information for each *phase* of the program.
@@ -246,7 +264,7 @@ class ConfigParameters(object):
             self._get_continue_params()
         else:
             self._get_retrain_params()
-
+        self._get_common_params()
 
     def load_old_params(self):
         """ Load parameters from *self.files_spec['previous_QNAS_params']* and replace
@@ -337,23 +355,22 @@ class ConfigParameters(object):
 
     def save_params_logfile(self):
         """ Helper function to save the parameters in a txt file. """
-
-        data_dict = {key: value for key, value in self.data_info.__dict__.items()
-                     if key != 'mean_image'}
-
+        # data_dict = {key: value for key, value in self.data_info.__dict__.items()
+        #              if key != 'mean_image'}
+        
         if self.train_spec['phase'] == 'retrain':
             phase = 'retrain'
             params_dict = {'evolved_params': self.evolved_params,
                            'train': self.train_spec,
-                           'files': self.files_spec,
-                           'train_data_info': data_dict}
+                           'files': self.files_spec}
+                           #'train_data_info': data_dict}
         else:
             phase = 'evolution'
             params_dict = {'QNAS': self.QNAS_spec,
                            'train': self.train_spec,
                            'files': self.files_spec,
-                           'fn_dict': self.fn_dict,
-                           'train_data_info': data_dict}
+                           'fn_dict': self.fn_dict}
+                           #'train_data_info': data_dict}
 
         params_file_path = os.path.join(self.train_spec['experiment_path'],
                                         f'log_params_{phase}.txt')
