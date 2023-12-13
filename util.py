@@ -1,8 +1,11 @@
+import logging
 import yaml
 import pickle as pkl
 import os
 import re
 import matplotlib.pyplot as plt
+from shutil import rmtree
+
 
 
 
@@ -128,3 +131,83 @@ def plot_training_history(results_dict:dict, params:dict, retrain:bool=False):
         ax[1].grid(True)
     
     plt.show()
+
+def delete_old_dirs(path, keep_best=False, best_id=''):
+    """ Delete directories with old training files (models, checkpoints...). Assumes the
+        directories' names start with digits.
+
+    Args:
+        path: (str) path to the experiment folder.
+        keep_best: (bool) True if user wants to keep files from the best individual.
+        best_id: (str) id of the best individual.
+    """
+
+    folders = [os.path.join(path, d) for d in os.listdir(path)
+               if os.path.isdir(os.path.join(path, d)) and d[0].isdigit()]
+    folders.sort(key=natural_key)
+
+    if keep_best and best_id:
+        folders = [d for d in folders if os.path.basename(d) != best_id]
+
+    for f in folders:
+        rmtree(f)
+
+def check_files(exp_path):
+    """ Check if exp_path exists and if it does, check if log_file is valid.
+
+    Args:
+        exp_path: (str) path to the experiment folder.
+    """
+
+    if not os.path.exists(exp_path):
+        raise OSError('User must provide a valid \"--experiment_path\" to continue '
+                      'evolution or to retrain a model.')
+
+    file_path = os.path.join(exp_path, 'data_QNAS.pkl')
+
+    if os.path.exists(file_path):
+        if os.stat(file_path).st_size == 0:
+            raise OSError('User must provide an \"--experiment_path\" with a valid data file to '
+                          'continue evolution or to retrain a model.')
+    else:
+        raise OSError('log_file not found!')
+
+    file_path = os.path.join(exp_path, 'log_params_evolution.txt')
+
+    if os.path.exists(file_path):
+        if os.stat(file_path).st_size == 0:
+            raise OSError('User must provide an \"--experiment_path\" with a valid config_file '
+                          'to continue evolution or to retrain a model.')
+    else:
+        raise OSError('log_params_evolution.txt not found!')
+    
+def init_log(log_level, name, file_path=None):
+    """ Initialize a logging.Logger with level *log_level* and name *name*.
+
+    Args:
+        log_level: (str) one of 'NONE', 'INFO' or 'DEBUG'.
+        name: (str) name of the module initiating the logger (will be the logger name).
+        file_path: (str) path to the log file. If None, stdout is used.
+
+    Returns:
+        logging.Logger object.
+    """
+
+    logger = logging.getLogger(name)
+
+    if file_path is None:
+        handler = logging.StreamHandler()
+    else:
+        handler = logging.FileHandler(file_path)
+
+    formatter = logging.Formatter('%(levelname)s: %(module)s: %(asctime)s.%(msecs)03d '
+                                  '- %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    if log_level == 'INFO':
+        logger.setLevel(logging.INFO)
+    elif log_level == 'DEBUG':
+        logger.setLevel(logging.DEBUG)
+
+    return logger
