@@ -50,7 +50,7 @@ def balance_dataset(dataset, indices, max_samples_per_class):
     return balanced_indices
 
 def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size=1000,limit_data=None,
-                   seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=4):
+                   seed=None,info:dict=None,data_aug=True,for_train=True, num_workers=0):
   """
   This function creates a dataloader for the CIFAR10 dataset.
   
