@@ -14,10 +14,11 @@ from tqdm.notebook import tqdm
 from cnn.metrics import *
 from typing import Dict, List, Union, Any
 from cnn import model, input
-from util import create_info_file
+from util import create_info_file, init_log
 
 
 TRAIN_TIMEOUT = 5400
+LOGGER = init_log("INFO", name=__name__)
 
 def train_epoch(model, criterion, optimizer, data_loader, device):
     model.train()
@@ -121,7 +122,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             if epoch % 1 == 0:
                 print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
-        if epoch % 5 == 0 and epoch < start_eval:
+        if epoch % 10 == 0 and epoch < start_eval:
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
             
     params['t1'] = time.time()
@@ -137,7 +138,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     return training_results
 
 
-def fitness_calculation(args:Dict[str, Any],
+def fitness_calculation(id_num:str, params:Dict[str, Any], fn_dict:Dict[str, Any], net_list:List[str],return_val,
                         debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
@@ -162,12 +163,8 @@ def fitness_calculation(args:Dict[str, Any],
     Raises:
         TimeoutError: If the training process takes too long to complete.
     """
-    id_num = args['id_num']
-    params = args['params']
-    fn_dict = args['fn_dict'] 
-    net_list = args['net_list']
-
-
+   
+    
     model_path = os.path.join(params['experiment_path'], id_num)
     if not os.path.exists(model_path):
         os.makedirs(model_path)
@@ -206,6 +203,7 @@ def fitness_calculation(args:Dict[str, Any],
 
     
     device = params['device']
+    LOGGER.info(f"Training model {id_num} on device {device} ...")
     #print(f"Training model {id_num} on device {device} ...")
     
     # Load the model_net to the GPU
@@ -233,10 +231,12 @@ def fitness_calculation(args:Dict[str, Any],
         if debug:
             result = results_dict
         else:
-            result = results_dict['best_accuracy']
+            #result = results_dict['best_accuracy']
+            return_val.value = results_dict['best_accuracy']
         
     except TimeoutError:
-        result = 0.0 # Penalize the model if it takes too long to train.
-        return result
+        #result = 0.0 # Penalize the model if it takes too long to train.
+        #return result
+        return_val.value = 0.0
     
     return result
