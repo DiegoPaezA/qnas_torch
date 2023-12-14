@@ -1,7 +1,7 @@
-""" Copyright (c) 2020, Daniela Szwarcman and IBM Research
+""" Copyright (c) 2023, Diego Páez
     * Licensed under The MIT License [see LICENSE for details]
 
-    - Distribute population eval using MPI.
+    - Distribute and Evaluate the population using multiple processes.
 """
 
 from multiprocessing import Process, Value
@@ -15,11 +15,10 @@ from typing import Dict, Any, List, Union
 
 class EvalPopulationDask(object):
     """
-    Evaluate a population using Dask.
+    Evaluate a population using multiple processes.
 
     This class is designed to distribute the evaluation of a population of models
-    using Dask, a parallel computing library. It allows parallel training and
-    evaluation of multiple models on a Dask cluster with GPU support.
+    using multiple processes.
     
     Parameters
     ----------
@@ -71,7 +70,7 @@ class EvalPopulationDask(object):
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
         """
-        Evaluate the population using Dask.
+        Evaluate the population.
 
         Parameters
         ----------
