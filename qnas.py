@@ -226,7 +226,7 @@ class QNAS(object):
                                                                 distance=self.random)
         # Generate classical pop for network structure
         new_pop_net = self.qpop_net.generate_classical()
-
+        self.logger.info("new population created =%s", new_pop_net)
         # Evaluate population
         new_fitnesses, raw_fitnesses = self.eval_pop(new_pop_params, new_pop_net)
 
