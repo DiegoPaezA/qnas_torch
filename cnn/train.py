@@ -125,8 +125,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
             
     params['t1'] = time.time()
+    params['training_time'] = params['t1'] - params['t0']
     
-    #create_info_file(params['model_path'], params, 'training_params.txt')
+    create_info_file(params['model_path'], params, 'training_params.txt')
     
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
@@ -136,10 +137,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     return training_results
 
 
-def fitness_calculation(id_num: str,
-                        params: Dict[str, Any], 
-                        fn_dict: Dict[str, Any], 
-                        net_list: List[str],
+def fitness_calculation(args:Dict[str, Any],
                         debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
@@ -164,6 +162,10 @@ def fitness_calculation(id_num: str,
     Raises:
         TimeoutError: If the training process takes too long to complete.
     """
+    id_num = args['id_num']
+    params = args['params']
+    fn_dict = args['fn_dict'] 
+    net_list = args['net_list']
 
 
     model_path = os.path.join(params['experiment_path'], id_num)
@@ -198,13 +200,13 @@ def fitness_calculation(id_num: str,
     
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
-    params['model_net'] = model_net
+    #params['model_net'] = model_net
     params['net_list'] = net_list
 
 
     
     device = params['device']
-    print(f"Training model {id_num} on device {device} ...")
+    #print(f"Training model {id_num} on device {device} ...")
     
     # Load the model_net to the GPU
     inputs, _ = next(iter(train_loader))
