@@ -9,6 +9,7 @@ import os
 from pickle import dump, HIGHEST_PROTOCOL
 
 import numpy as np
+import time
 
 from population import QPopulationNetwork, QPopulationParams
 from util import delete_old_dirs, init_log, load_pkl
@@ -425,7 +426,7 @@ class QNAS(object):
 
     def evolve(self):
         """ Run the evolution. """
-
+        start_evolution = time.time()
         max_generations = self.generations
 
         # Update maximum number of generations if continue previous evolution process
@@ -437,3 +438,9 @@ class QNAS(object):
         while self.current_gen < max_generations:
             self.generate_classical()
             self.go_next_gen()
+        
+        end_evolution = time.time()
+        total_evolution_time = end_evolution - start_evolution
+        evolution_hours = int(total_evolution_time / 3600)
+        evolution_minutes = int((total_evolution_time - evolution_hours * 3600) / 60)
+        self.logger.info(f"Total evolution time: {evolution_hours} hours and {evolution_minutes} minutes")
