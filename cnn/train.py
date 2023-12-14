@@ -239,4 +239,4 @@ def fitness_calculation(id_num:str, params:Dict[str, Any], fn_dict:Dict[str, Any
         #return result
         return_val.value = 0.0
     
-    return result
+    #return result
