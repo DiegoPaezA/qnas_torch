@@ -140,7 +140,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
       num_workers=num_workers,
       shuffle=False,
       pin_memory=True)
-    print("Dataloader ready for testing!")
+    #print("Dataloader ready for testing!")
     return test_loader
   
   # Split train_dataset into train and validation
@@ -200,7 +200,7 @@ def CIFAR10_loader(data_path:str, train_split=0.9,batch_size=256,eval_batch_size
   
   util.create_info_file(out_path=data_path, info_dict=info_dict)
   
-  print("Dataloader ready for Training!")
+  #print("Dataloader ready for Training!")
   
   return train_loader, val_loader
 
