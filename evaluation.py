@@ -132,7 +132,7 @@ class EvalPopulationDask(object):
             self.train_params['device'] = self.gpus[individual%len(self.gpus)]
             #print(f"device {self.train_params['device']}")
             #print(f"starting individual {individual}")
-            train.fitness_calculation(f"{generation}_{selected_thread}_{individual}",
+            train.fitness_calculation(f"{generation}_{individual}",
                                         {**train_params},
                                         fn_dict,
                                         decoded_net, 
