@@ -4,15 +4,14 @@
     - Distribute population eval using MPI.
 """
 
-import dask
-from dask.distributed import Client, LocalCluster
-from dask_cuda import LocalCUDACluster
-import time
+from multiprocessing import Process, Value
+from typing import Any, Dict
 import numpy as np
 from cnn import train
 from util import init_log
-import random
 import torch
+import random
+from typing import Dict, Any, List, Union
 
 class EvalPopulationDask(object):
     """
@@ -67,16 +66,9 @@ class EvalPopulationDask(object):
         
         self.train_params = params
         self.fn_dict = fn_dict
-        self.timeout = 9000
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-        self.threads_per_worker = 1
         
-        # Set up Dask client
-        gpu_num = len(self.gpus)
-        cluster = LocalCUDACluster(n_workers=gpu_num)
-        self.client = Client(cluster)
-
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
         """
         Evaluate the population using Dask.
@@ -101,33 +93,50 @@ class EvalPopulationDask(object):
             If the Dask operations exceed the specified timeout.
         """
         pop_size = len(decoded_nets)
-
-        #assert pop_size == num_threads
+        evaluations = np.empty(shape=(pop_size, ))
         
-        futures = []
+        variables = [Value('f', 0.00) for _ in range(pop_size)]
+        
+        selected_thread = 0
+        individual_per_thread = []
+        
+        for idx in range(len(variables)):
+            self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
+            individual_per_thread.append((idx, selected_thread, decoded_nets[idx], decoded_params[idx], variables[idx]))
+            selected_thread += 1
+            #if selected_thread >= self.train_params['threads']:
+            #    selected_thread = selected_thread % self.train_params['threads']
+        
+        processes = []
+        
+        for idx in range(pop_size):
+            individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
+            process = Process(target=self.run_individuals, args=(generation,
+                                                self.train_params,
+                                                self.fn_dict,
+                                                individuals_selected_thread))
+            process.start()
+            processes.append(process)
 
-        try:
-            for i in range(pop_size):
-                id_num = f'{generation}_{i}'
-                
-                self.train_params['device'] = self.gpus[i%len(self.gpus)]
-                #print(f"Training model {id_num} on device {self.train_params['device']} ...")
-                args = {'id_num': id_num,
-                        'params': {**self.train_params},
-                        'fn_dict': self.fn_dict,
-                        'net_list': decoded_nets[i]}
-
-                future = self.client.submit(train.fitness_calculation, **args)
-                futures.append(future)
+        for p in processes:
+            p.join()
+                    
+        for idx, val in enumerate(variables):
+            evaluations[idx] = val.value
+        
+        return evaluations
             
-            self.logger.info(f"Training models ...")
-            evaluations = self.client.gather(futures)
-            self.logger.info(f"Generation {generation} done.")
-            # save evaluations history
-            # self.logger.info(f"Saving evaluations history ...")
             
-        except TimeoutError:
-            self.client.shutdown()
-            raise
-
-        return np.array(evaluations)
+    def run_individuals(self, generation,  train_params, fn_dict, individuals_selected_thread):
+        for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
+            self.train_params['device'] = self.gpus[individual%len(self.gpus)]
+            #print(f"device {self.train_params['device']}")
+            #print(f"starting individual {individual}")
+            train.fitness_calculation(f"{generation}_{selected_thread}_{individual}",
+                                        {**train_params},
+                                        fn_dict,
+                                        decoded_net, 
+                                        return_val)
+            #print(f"finishing individual {individual} - {return_val.value}")
+            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {return_val.value}")
+            
