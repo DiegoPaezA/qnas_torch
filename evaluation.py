@@ -101,7 +101,6 @@ class EvalPopulationDask(object):
             If the Dask operations exceed the specified timeout.
         """
         pop_size = len(decoded_nets)
-        #num_threads = self.threads_per_worker*len(self.client.ncores())
 
         #assert pop_size == num_threads
         
@@ -112,7 +111,7 @@ class EvalPopulationDask(object):
                 id_num = f'{generation}_{i}'
                 
                 self.train_params['device'] = self.gpus[i%len(self.gpus)]
-                print(f"Training model {id_num} on device {self.train_params['device']} ...")
+                #print(f"Training model {id_num} on device {self.train_params['device']} ...")
                 args = {'id_num': id_num,
                         'params': {**self.train_params},
                         'fn_dict': self.fn_dict,
@@ -120,8 +119,10 @@ class EvalPopulationDask(object):
 
                 future = self.client.submit(train.fitness_calculation, **args)
                 futures.append(future)
-            print(f"Waiting for evaluations ...")
+            
+            self.logger.info(f"Training models ...")
             evaluations = self.client.gather(futures)
+            self.logger.info(f"Generation {generation} done.")
             # save evaluations history
             # self.logger.info(f"Saving evaluations history ...")
             
