@@ -100,7 +100,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     start_eval = max_epochs - epochs_to_eval
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
 
-    for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
+    #for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
+    for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
         training_losses.append(train_loss)
         training_accuracies.append(train_accuracy)
@@ -119,11 +120,11 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
                 torch.save(model.state_dict(), best_model_path)
                 create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
 
-            if epoch % 1 == 0:
-                print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
+            #if epoch % 1 == 0:
+            #    print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
-        if epoch % 10 == 0 and epoch < start_eval:
-            print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
+        #if epoch % 10 == 0 and epoch < start_eval:
+        #    print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
             
     params['t1'] = time.time()
     params['training_time'] = params['t1'] - params['t0']
