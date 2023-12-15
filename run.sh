@@ -8,3 +8,9 @@ python run_evolution.py \
     --config_file 'config_files/config2.txt' \
     --data_path cifar10_data \
     --log_level INFO
+
+python run_evolution.py \
+    --experiment_path my_exp_5 \
+    --config_file 'config_files/config3.txt' \
+    --data_path cifar10_data \
+    --log_level INFO
