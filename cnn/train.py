@@ -65,7 +65,7 @@ def evaluate(model, criterion, data_loader, device):
 
 def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer, 
           train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
-          params:Dict, device:torch.device) -> Dict:
+          params:Dict, device:torch.device, debug=False) -> Dict:
     """
     Train a neural network model.
 
@@ -119,12 +119,12 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
                 best_accuracy = accuracy
                 torch.save(model.state_dict(), best_model_path)
                 create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
-
-            #if epoch % 1 == 0:
-            #    print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
-
-        #if epoch % 10 == 0 and epoch < start_eval:
-        #    print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
+            if debug:
+                if epoch % 1 == 0:
+                    print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
+        #if debug:    
+        #    if epoch % 5 == 0 and epoch < start_eval:
+        #        print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss}")
             
     params['t1'] = time.time()
     params['training_time'] = params['t1'] - params['t0']
@@ -139,8 +139,10 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     return training_results
 
 
-def fitness_calculation(id_num:str, params:Dict[str, Any], fn_dict:Dict[str, Any], net_list:List[str],return_val,
-                        debug:bool=False) -> Dict[str, Union[List[float], float]]:
+def fitness_calculation(id_num:str, params:Dict[str, Any], 
+                        fn_dict:Dict[str, Any], net_list:List[str],
+                        train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
+                        return_val,debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
     This function trains and evaluates a convolutional neural network model using the specified
@@ -172,27 +174,10 @@ def fitness_calculation(id_num:str, params:Dict[str, Any], fn_dict:Dict[str, Any
         
     params['model_path'] = model_path
     
-    if params['limit_data']:
-        limit_data = params['limit_data_value']
-    else:
-        limit_data = None
+    # Load data info
+    dataset_info = input.available_datasets[params['dataset'].lower()]
 
-    # Load data
-    if params['dataset'] == 'Cifar10':
-        
-        data_info = input.cifar10_info
-        data_path = 'cifar10_data'
-        
-        train_loader, val_loader = input.CIFAR10_loader(data_path, limit_data=limit_data,
-                                                        for_train=True, 
-                                                        data_aug=params['data_augmentation'],
-                                                        batch_size=params['batch_size'],
-                                                        eval_batch_size=params['eval_batch_size'])
-        
-    elif params['dataset'] == 'Cifar100':
-        data_info = input.cifar100_info
-
-    model_net = model.NetworkGraph(num_classes=data_info["num_classes"], mu=0.99)
+    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)
     
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     
@@ -228,9 +213,11 @@ def fitness_calculation(id_num:str, params:Dict[str, Any], fn_dict:Dict[str, Any
     
     # Train the model in fitness scheme
     try:
-        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device)
+        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device,debug)
         if debug:
+            print(f"Debugging model {id_num} on device {device} ...")
             result = results_dict
+            return result
         else:
             #result = results_dict['best_accuracy']
             return_val.value = results_dict['best_accuracy']
