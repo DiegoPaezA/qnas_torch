@@ -168,9 +168,9 @@ class GenericDataLoader:
     np.random.shuffle(indices)
     train_indices, val_indices = indices[split:], indices[:split]
     
-    if self.params['limit_data'] is not None and self.params['limit_data'] < num_train:
-      train_samples = int(self.train_split * self.params['limit_data'])
-      val_samples = int(self.params['limit_data'] - train_samples)
+    if self.params['limit_data'] and self.params['limit_data_value'] < num_train:
+      train_samples = int(self.train_split * self.params['limit_data_value'])
+      val_samples = int(self.params['limit_data_value'] - train_samples)
       
       max_samples_per_class_train = train_samples/self.num_classes
       max_samples_per_class_val = val_samples/self.num_classes
