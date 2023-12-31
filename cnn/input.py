@@ -10,7 +10,7 @@ import util
 import os
 from time import time
 import torchvision.datasets
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, Dataset
 from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, Normalize, TrivialAugmentWide
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -35,6 +35,20 @@ available_datasets = {
   'cifar100': cifar100_info
 }
 
+class MyDataset(Dataset):
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+        
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
+        
+    def __len__(self):
+        return len(self.subset)
+      
 class GenericDataLoader:
   """A generic data loader for PyTorch, supporting various datasets and data augmentation."""
   def __init__(self, params: dict, train_split=0.9, seed=None, info: dict = None):
@@ -174,8 +188,8 @@ class GenericDataLoader:
       valid_dataset = Subset(full_dataset, val_idx)
     
     # Apply transformations to the datasets
-    train_dataset.dataset.transform = self.train_transform
-    valid_dataset.dataset.transform = self.transform
+    train_dataset = MyDataset(train_dataset, transform=self.train_transform)
+    valid_dataset = MyDataset(valid_dataset, transform=self.transform)
     
     train_loader = DataLoader(
       train_dataset,
