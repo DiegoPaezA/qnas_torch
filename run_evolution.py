@@ -32,7 +32,7 @@ def main(**args):
     logger.info(f"Saving parameters for {config.phase} phase ...")
     config.save_params_logfile()
     
-    eval_pop = evaluation.EvalPopulationDask(params=config.train_spec,
+    eval_pop = evaluation.EvalPopulation(params=config.train_spec,
                                                 fn_dict=config.fn_dict,
                                                 log_level=config.train_spec['log_level'])
     

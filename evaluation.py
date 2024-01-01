@@ -13,7 +13,7 @@ import torch
 import random
 from typing import Dict, Any, List, Union
 
-class EvalPopulationDask(object):
+class EvalPopulation(object):
     """
     Evaluate a population using multiple processes.
 
@@ -52,7 +52,7 @@ class EvalPopulationDask(object):
     """
     def __init__(self, params: dict, fn_dict: dict, log_level: str = 'INFO'):
         """
-        Initialize the EvalPopulationDask object.
+        Initialize the EvalPopulation object.
 
         Arguments:
         params : dict
@@ -103,8 +103,6 @@ class EvalPopulationDask(object):
             self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
             individual_per_thread.append((idx, selected_thread, decoded_nets[idx], decoded_params[idx], variables[idx]))
             selected_thread += 1
-            #if selected_thread >= self.train_params['threads']:
-            #    selected_thread = selected_thread % self.train_params['threads']
         
         processes = []
         
@@ -129,13 +127,10 @@ class EvalPopulationDask(object):
     def run_individuals(self, generation,  train_params, fn_dict, individuals_selected_thread):
         for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
             self.train_params['device'] = self.gpus[individual%len(self.gpus)]
-            #print(f"device {self.train_params['device']}")
-            #print(f"starting individual {individual}")
             train.fitness_calculation(f"{generation}_{individual}",
                                         {**train_params},
                                         fn_dict,
                                         decoded_net, 
                                         return_val)
-            #print(f"finishing individual {individual} - {return_val.value}")
             self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {return_val.value}")
             
