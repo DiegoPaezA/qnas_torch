@@ -11,7 +11,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from tqdm.notebook import tqdm
-from cnn.metrics import *
 from typing import Dict, List, Union, Any
 from cnn import model, input
 from util import create_info_file, init_log
@@ -100,7 +99,6 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     start_eval = max_epochs - epochs_to_eval
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
 
-    #for epoch in tqdm(range(1, max_epochs + 1), desc="Training Fitness Scheme"):
     for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
         training_losses.append(train_loss)
@@ -122,9 +120,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             if debug:
                 if epoch % 1 == 0:
                     print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
-        #if debug:    
-        #    if epoch % 5 == 0 and epoch < start_eval:
-        #        print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss}")
+        if debug:    
+            if epoch % 5 == 0 and epoch < start_eval:
+                print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
             
     params['t1'] = time.time()
     params['training_time'] = params['t1'] - params['t0']
@@ -167,35 +165,29 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
         TimeoutError: If the training process takes too long to complete.
     """
    
-    
+    device = params['device']
+    params['net_list'] = net_list
     model_path = os.path.join(params['experiment_path'], id_num)
     if not os.path.exists(model_path):
         os.makedirs(model_path)
-        
+    
     params['model_path'] = model_path
+    
+    LOGGER.info(f"Training model {id_num} on device {device} ...")
     
     # Load data info
     dataset_info = input.available_datasets[params['dataset'].lower()]
-
-    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)
     
+    # Create the model
+    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99, device=device)    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
-    
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
+    model_net.to(device)
 
-    #params['model_net'] = model_net
-    params['net_list'] = net_list
-
-
-    
-    device = params['device']
-    LOGGER.info(f"Training model {id_num} on device {device} ...")
-    #print(f"Training model {id_num} on device {device} ...")
-    
-    # Load the model_net to the GPU
+    # Add the fully connected layer to the model
     inputs, _ = next(iter(train_loader))
     _ = model_net(inputs)
-    model_net.to(device)
+    
     
     criterion = nn.CrossEntropyLoss()
     
@@ -215,7 +207,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     try:
         results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device,debug)
         if debug:
-            print(f"Debugging model {id_num} on device {device} ...")
+            print(f"Finished fitness calculation for model {id_num}")
             result = results_dict
             return result
         else:
@@ -226,5 +218,3 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
         #result = 0.0 # Penalize the model if it takes too long to train.
         #return result
         return_val.value = 0.0
-    
-    #return result
