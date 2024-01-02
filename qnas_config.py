@@ -250,8 +250,8 @@ class ConfigParameters(object):
         self.train_spec['log_level'] = self.args['log_level']
 
         self.files_spec['log_file'] = os.path.join(self.args['experiment_path'], 'log_QNAS.txt')
-        #self.files_spec['data_file'] = os.path.join(self.args['experiment_path'],
-        #                                            'data_QNAS.pkl')
+        self.files_spec['data_file'] = os.path.join(self.args['experiment_path'],
+                                                    'data_QNAS.pkl')
         
     def get_parameters(self):
         """ Organize dicts combining the command-line and config_file parameters,
