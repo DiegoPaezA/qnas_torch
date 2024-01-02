@@ -182,12 +182,11 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99, device=device)    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
-    model_net.to(device)
-
+    
     # Add the fully connected layer to the model
     inputs, _ = next(iter(train_loader))
     _ = model_net(inputs)
-    
+    model_net.to(device)
     
     criterion = nn.CrossEntropyLoss()
     

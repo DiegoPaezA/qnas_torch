@@ -36,16 +36,14 @@ available_datasets = {
 }
 
 class MyDataset(Dataset):
-    def __init__(self, subset, transform=None, device='cpu'):
+    def __init__(self, subset, transform=None):
         self.subset = subset
         self.transform = transform
-        self.device = device
         
     def __getitem__(self, index):
         x, y = self.subset[index]
         if self.transform:
           x = self.transform(x)
-          x = x.to(self.device)
         return x, y
         
     def __len__(self):
@@ -127,7 +125,7 @@ class GenericDataLoader:
             Normalize(mean=mean, std=std)
         ])
       
-  def get_loader(self, for_train=True, device='cpu'):
+  def get_loader(self, for_train=True):
     """
     Get data loader for training or validation/testing.
 
@@ -190,22 +188,22 @@ class GenericDataLoader:
       valid_subset = Subset(full_dataset, val_idx)
     
     # Apply transformations to the datasets
-    train_dataset = MyDataset(train_subset, transform=self.train_transform, device=device)
-    valid_dataset = MyDataset(valid_subset, transform=self.transform, device=device)
+    train_dataset = MyDataset(train_subset, transform=self.train_transform)
+    valid_dataset = MyDataset(valid_subset, transform=self.transform)
     
     train_loader = DataLoader(
       train_dataset,
       batch_size=self.params['batch_size'],
-      num_workers=0,
+      num_workers=4,
       shuffle=True,
-      pin_memory=False)
+      pin_memory=True)
 
     val_loader = DataLoader(
       valid_dataset,
       batch_size=self.params['eval_batch_size'],
-      num_workers=0,
+      num_workers=4,
       shuffle=False,
-      pin_memory=False)
+      pin_memory=True)
   
     self.info_dict['train_records'] = len(train_dataset)
     self.info_dict['valid_records'] = len(valid_dataset)

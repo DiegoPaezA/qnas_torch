@@ -328,7 +328,7 @@ class AvgPooling(nn.Module):
         return tensor
     
 class FullyConnected(nn.Module):
-    def __init__(self,input_features=1, units=1, device='cpu'):
+    def __init__(self,input_features=1, units=1):
         """ Initialize FullyConnected.
 
         Args:
@@ -342,7 +342,7 @@ class FullyConnected(nn.Module):
         self.inputs__features = input_features
         self.units = units                
         self.fc = nn.Linear(in_features=self.inputs__features,
-                            out_features=self.units).to(device)
+                            out_features=self.units)
                    
         init.kaiming_normal_(self.fc.weight, mode='fan_out', nonlinearity='relu')
         
@@ -399,7 +399,7 @@ def pad_features(tensors, channels_last=False):
     return tensors
 
 class NetworkGraph(nn.Module):
-    def __init__(self, num_classes, mu=0.9, epsilon=2e-5, in_channels=3,device='cpu'):
+    def __init__(self, num_classes, mu=0.9, epsilon=2e-5, in_channels=3):
         """ Initialize NetworkGraph.
 
         Args:
@@ -419,7 +419,6 @@ class NetworkGraph(nn.Module):
         self.mu = mu
         self.epsilon = epsilon
         self.in_channels = in_channels
-        self.device = device
         #self.layer_dict = nn.ModuleDict()
         
     def create_functions(self, net_list, fn_dict):
@@ -470,7 +469,7 @@ class NetworkGraph(nn.Module):
         if self.fc is None:
             batch_size, num_features, height, width = inputs.size()
             num_flat_features = num_features * height * width
-            self.fc = FullyConnected(input_features=num_flat_features, units=self.num_classes, device=self.device)
+            self.fc = FullyConnected(input_features=num_flat_features, units=self.num_classes)
 
         batch_size = inputs.size(0)
         inputs = inputs.reshape(batch_size, -1)
