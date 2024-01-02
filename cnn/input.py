@@ -10,7 +10,7 @@ import util
 import os
 from time import time
 import torchvision.datasets
-from torch.utils.data import DataLoader, Subset, Dataset
+from torch.utils.data import DataLoader, Subset, Dataset, TensorDataset
 from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, Normalize, TrivialAugmentWide
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -48,7 +48,7 @@ class MyDataset(Dataset):
         
     def __len__(self):
         return len(self.subset)
-      
+        
 class GenericDataLoader:
   """A generic data loader for PyTorch, supporting various datasets and data augmentation."""
   def __init__(self, params: dict, train_split=0.9, seed=None, info: dict = None):
@@ -180,16 +180,16 @@ class GenericDataLoader:
         label_indices = [i for i in val_idx if labels[i] == label]
         val_indices.extend(label_indices[:val_count_per_class])
       
-      train_dataset = Subset(full_dataset, train_indices)
-      valid_dataset = Subset(full_dataset, val_indices)
+      train_subset = Subset(full_dataset, train_indices)
+      valid_subset = Subset(full_dataset, val_indices)
 
     else:
-      train_dataset = Subset(full_dataset, train_idx)
-      valid_dataset = Subset(full_dataset, val_idx)
+      train_subset = Subset(full_dataset, train_idx)
+      valid_subset = Subset(full_dataset, val_idx)
     
     # Apply transformations to the datasets
-    train_dataset = MyDataset(train_dataset, transform=self.train_transform)
-    valid_dataset = MyDataset(valid_dataset, transform=self.transform)
+    train_dataset = MyDataset(train_subset, transform=self.train_transform)
+    valid_dataset = MyDataset(valid_subset, transform=self.transform)
     
     train_loader = DataLoader(
       train_dataset,
