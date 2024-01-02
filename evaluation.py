@@ -12,6 +12,7 @@ from util import init_log
 import torch
 import random
 from typing import Dict, Any, List, Union
+from cnn import input
 
 class EvalPopulation(object):
     """
@@ -67,6 +68,7 @@ class EvalPopulation(object):
         self.fn_dict = fn_dict
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
+        self.loader = input.GenericDataLoader(params=self.train_params)
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
         """
@@ -104,6 +106,7 @@ class EvalPopulation(object):
             individual_per_thread.append((idx, selected_thread, decoded_nets[idx], decoded_params[idx], variables[idx]))
             selected_thread += 1
         
+        train_loader, val_loader = self.loader.get_loader()
         processes = []
         
         for idx in range(pop_size):
@@ -111,6 +114,8 @@ class EvalPopulation(object):
             process = Process(target=self.run_individuals, args=(generation,
                                                 self.train_params,
                                                 self.fn_dict,
+                                                train_loader,
+                                                val_loader,
                                                 individuals_selected_thread))
             process.start()
             processes.append(process)
@@ -124,13 +129,15 @@ class EvalPopulation(object):
         return evaluations
             
             
-    def run_individuals(self, generation,  train_params, fn_dict, individuals_selected_thread):
+    def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread):
         for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
             self.train_params['device'] = self.gpus[individual%len(self.gpus)]
             train.fitness_calculation(f"{generation}_{individual}",
                                         {**train_params},
                                         fn_dict,
-                                        decoded_net, 
+                                        decoded_net,
+                                        train_loader,
+                                        val_loader, 
                                         return_val)
             self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {return_val.value}")
             
