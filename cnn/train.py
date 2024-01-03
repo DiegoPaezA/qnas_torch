@@ -179,7 +179,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     dataset_info = input.available_datasets[params['dataset'].lower()]
     
     # Create the model
-    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99, device=device)    
+    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
     
