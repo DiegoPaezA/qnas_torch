@@ -68,6 +68,7 @@ class EvalPopulation(object):
         self.fn_dict = fn_dict
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
+        #self.gpus = ['cuda:0', 'cuda:2']
         self.loader = input.GenericDataLoader(params=self.train_params)
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
