@@ -67,8 +67,8 @@ class EvalPopulation(object):
         self.train_params = params
         self.fn_dict = fn_dict
         self.logger = init_log(log_level, name=__name__)
-        self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-        #self.gpus = ['cuda:0', 'cuda:2']
+        desired_gpus = params["available_gpus"]
+        self.gpus = [f'cuda:{i}' for i in desired_gpus if i < torch.cuda.device_count()]
         self.loader = input.GenericDataLoader(params=self.train_params)
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
