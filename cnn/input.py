@@ -194,14 +194,14 @@ class GenericDataLoader:
     train_loader = DataLoader(
       train_dataset,
       batch_size=self.params['batch_size'],
-      num_workers=4,
+      num_workers=self.params['num_workers'],
       shuffle=True,
       pin_memory=True)
 
     val_loader = DataLoader(
       valid_dataset,
       batch_size=self.params['eval_batch_size'],
-      num_workers=4,
+      num_workers=self.params['num_workers'],
       shuffle=False,
       pin_memory=True)
   
