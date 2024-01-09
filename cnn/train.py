@@ -115,7 +115,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                torch.save(model.state_dict(), best_model_path)
+                #torch.save(model.state_dict(), best_model_path)
                 create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
             if debug:
                 if epoch % 1 == 0:
