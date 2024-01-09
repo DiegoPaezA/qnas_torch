@@ -1,14 +1,10 @@
 import argparse
 import os
 
-
 import qnas
 import qnas_config as cfg
 import evaluation
 from util import check_files, init_log
-import numpy as np
-
-import torch
 
 def main(**args):
     
