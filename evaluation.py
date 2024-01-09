@@ -4,14 +4,12 @@
     - Distribute and Evaluate the population using multiple processes.
 """
 
-from multiprocessing import Process, Value
-from typing import Any, Dict
+import torch.multiprocessing as mp
+from typing import Dict, Any, List
 import numpy as np
 from cnn import train
 from util import init_log
 import torch
-import random
-from typing import Dict, Any, List, Union
 from cnn import input
 
 class EvalPopulation(object):
@@ -70,6 +68,8 @@ class EvalPopulation(object):
         desired_gpus = params["available_gpus"]
         self.gpus = [f'cuda:{i}' for i in desired_gpus if i < torch.cuda.device_count()]
         self.loader = input.GenericDataLoader(params=self.train_params)
+        #mp.set_start_method('fork')  # fork for linux, spawn for windows
+        
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
         """
@@ -97,22 +97,21 @@ class EvalPopulation(object):
         pop_size = len(decoded_nets)
         evaluations = np.empty(shape=(pop_size, ))
         
-        variables = [Value('f', 0.00) for _ in range(pop_size)]
+        variables = [mp.Value('f', 0.00) for _ in range(pop_size)]
         
-        selected_thread = 0
-        individual_per_thread = []
+        # create a list of tuples with the individual, the selected thread, the decoded net, the decoded params and the return value    
+        individual_per_thread = [(idx, idx % pop_size, decoded_nets[idx], decoded_params[idx], variables[idx])
+                         for idx in range(len(variables))]
         
-        for idx in range(len(variables)):
-            self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
-            individual_per_thread.append((idx, selected_thread, decoded_nets[idx], decoded_params[idx], variables[idx]))
-            selected_thread += 1
+        # for idx, selected_thread, _, _, _ in individual_per_thread:
+        #     self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
         
         train_loader, val_loader = self.loader.get_loader()
         processes = []
         
         for idx in range(pop_size):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
-            process = Process(target=self.run_individuals, args=(generation,
+            process = mp.Process(target=self.run_individuals, args=(generation,
                                                 self.train_params,
                                                 self.fn_dict,
                                                 train_loader,
@@ -141,4 +140,3 @@ class EvalPopulation(object):
                                         val_loader, 
                                         return_val)
             self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {return_val.value}")
-            
