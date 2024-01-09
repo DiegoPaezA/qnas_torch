@@ -116,3 +116,4 @@ cifar100_data/
 # Results
 my_exp_config2/
 my_exp_config2_Old/
+experiments/
