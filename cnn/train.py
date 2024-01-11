@@ -114,6 +114,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     
     # Automatic mixed precision training (AMP)
     scaler = GradScaler(enabled=enabled_mixed_precision) 
+    if enabled_mixed_precision:
+        LOGGER.info("Mixed precision training enabled")
     
     for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device, scaler, enabled_mixed_precision)
