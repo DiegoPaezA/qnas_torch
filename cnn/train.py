@@ -3,7 +3,12 @@
 
 - Compute the fitness of a model_net using the evolved networks.
 
+Documentation:
 
+    - Automatic mixed precision training (AMP): 
+        - https://pytorch.org/docs/stable/amp.html, 
+        - https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html#all-together-automatic-mixed-precision
+    
 """
 import os
 import time
@@ -14,24 +19,29 @@ from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
 from cnn import model, input
 from util import create_info_file, init_log
+from torch.cuda.amp import GradScaler
+
 
 
 TRAIN_TIMEOUT = 5400
 LOGGER = init_log("INFO", name=__name__)
 
-def train_epoch(model, criterion, optimizer, data_loader, device):
+def train_epoch(model, criterion, optimizer, data_loader, device, scaler, enabled_mixed_precision):
     model.train()
     train_loss = 0.0
     correct = 0
     total = 0
-
+    amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
     for inputs, labels in data_loader:
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
-        y_logits = model(inputs)
-        loss = criterion(y_logits, labels)
-        loss.backward()
-        optimizer.step()
+        
+        with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=enabled_mixed_precision):
+            y_logits = model(inputs)
+            loss = criterion(y_logits, labels)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
         train_loss += loss.item()
         _, predicted = y_logits.max(1)
         total += labels.size(0)
@@ -41,17 +51,19 @@ def train_epoch(model, criterion, optimizer, data_loader, device):
     train_loss /= len(data_loader)
     return train_loss, accuracy
 
-def evaluate(model, criterion, data_loader, device):
+def evaluate(model, criterion, data_loader, device, enabled_mixed_precision):
     model.eval()
     validation_loss = 0.0
     correct = 0
     total = 0
+    amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
 
     with torch.no_grad():
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(device), labels.to(device)
-            y_logits = model(inputs)
-            loss = criterion(y_logits, labels)
+            with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=enabled_mixed_precision):
+                y_logits = model(inputs)
+                loss = criterion(y_logits, labels)
             validation_loss += loss.item()
             _, predicted = y_logits.max(1)
             total += labels.size(0)
@@ -96,11 +108,15 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results = {}
     max_epochs = params['max_epochs']
     epochs_to_eval = params['epochs_to_eval']
+    enabled_mixed_precision = params['mixed_precision']
     start_eval = max_epochs - epochs_to_eval
-    best_model_path = os.path.join(params['model_path'], 'best_model.pth')
-
+    #best_model_path = os.path.join(params['model_path'], 'best_model.pt')
+    
+    # Automatic mixed precision training (AMP)
+    scaler = GradScaler(enabled=enabled_mixed_precision) 
+    
     for epoch in range(1, max_epochs + 1):
-        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
+        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device, scaler, enabled_mixed_precision)
         training_losses.append(train_loss)
         training_accuracies.append(train_accuracy)
 
@@ -109,7 +125,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             raise TimeoutError()
         
         if epoch > start_eval:
-            validation_loss, accuracy = evaluate(model, criterion, val_loader, device)
+            validation_loss, accuracy = evaluate(model, criterion, val_loader, device, enabled_mixed_precision)
             validation_losses.append(validation_loss)
             validation_accuracies.append(accuracy)
 
@@ -206,7 +222,6 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     try:
         results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device,debug)
         if debug:
-            print(f"Finished fitness calculation for model {id_num}")
             result = results_dict
             return result
         else:
