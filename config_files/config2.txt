@@ -4,9 +4,9 @@ QNAS:
     crossover_rate: 0.5
     max_generations: 100
     max_num_nodes: 20
-    num_quantum_ind: 5
+    num_quantum_ind: 4
     penalize_number: 3
-    repetition: 3
+    repetition: 2
     replace_method: best
     update_quantum_gen: 5
     update_quantum_rate: 0.1
@@ -38,6 +38,7 @@ train:
     max_epochs: 50
     epochs_to_eval: 5 
     optimizer: AdamW
+    available_gpus: [0, 2] # gpu0, gpu1, gpu2 [0, 1, 2]
     device: cuda:0
 
     # Dataset
