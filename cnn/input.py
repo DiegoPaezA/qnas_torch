@@ -125,7 +125,7 @@ class GenericDataLoader:
             Normalize(mean=mean, std=std)
         ])
       
-  def get_loader(self, for_train=True):
+  def get_loader(self, for_train=True, pin_memory_device=torch.device('cuda')):
     """
     Get data loader for training or validation/testing.
 
@@ -150,7 +150,8 @@ class GenericDataLoader:
         batch_size=self.params['eval_batch_size'],
         num_workers=0,
         shuffle=False,
-        pin_memory=True)
+        pin_memory=True,
+        pin_memory_device=pin_memory_device)
       return test_loader
     
     val_split = 1 - self.train_split
@@ -196,14 +197,16 @@ class GenericDataLoader:
       batch_size=self.params['batch_size'],
       num_workers=self.params['num_workers'],
       shuffle=True,
-      pin_memory=True)
+      pin_memory=True, 
+      pin_memory_device=pin_memory_device)
 
     val_loader = DataLoader(
       valid_dataset,
       batch_size=self.params['eval_batch_size'],
       num_workers=self.params['num_workers'],
       shuffle=False,
-      pin_memory=True)
+      pin_memory=True, 
+      pin_memory_device=pin_memory_device)
   
     self.info_dict['train_records'] = len(train_dataset)
     self.info_dict['valid_records'] = len(valid_dataset)

@@ -106,7 +106,7 @@ class EvalPopulation(object):
         # for idx, selected_thread, _, _, _ in individual_per_thread:
         #     self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
         
-        train_loader, val_loader = self.loader.get_loader()
+        train_loader, val_loader = self.loader.get_loader(pin_memory_device=self.gpus[0])
         processes = []
         
         for idx in range(pop_size):
