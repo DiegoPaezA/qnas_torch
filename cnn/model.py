@@ -69,6 +69,71 @@ class ConvBlock(nn.Module):
             
         return tensor
 
+class DepthConvBlock(nn.Module):
+    """ Depth Wise Separable Convolutional Block with Conv -> DepthwiseConv -> BatchNorm -> ReLU """
+
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+        """ Initialize DepthwiseSeparableConvBlock.
+
+        Args:
+            in_channel : int
+                Represents the number of channels in the input image (default 3 for RGB)
+            kernel : int
+                Represents the size of the convolutional window (3 means [3,3])
+            filters : int
+                Number of filters
+            strides : int
+                Represents the stride of the convolutional window (3 means [3,3])
+            mu : float
+                Mean for the batch normalization
+            epsilon : float
+                Epsilon for the batch normalization
+        """
+        super().__init__()
+        self.kernel_size = kernel
+        self.filters = filters
+        self.strides = strides
+        self.batch_norm_mu = mu
+        self.batch_norm_epsilon = epsilon
+        self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
+        self.activation = nn.ReLU()
+        self.channels_last = channels_last
+
+        # Depthwise Separable Convolution: Depthwise Convolution + Pointwise Convolution
+        self.depthwise_conv = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=self.kernel_size,
+                                        stride=self.strides, padding=self.padding, groups=in_channels)
+        self.pointwise_conv = nn.Conv2d(in_channels=in_channels,out_channels= self.filters, kernel_size=1)
+
+        init.kaiming_normal_(self.depthwise_conv.weight, mode='fan_out', nonlinearity='relu')
+        init.kaiming_normal_(self.pointwise_conv.weight, mode='fan_out', nonlinearity='relu')
+
+        self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
+                                         momentum=self.batch_norm_mu, 
+                                         eps=self.batch_norm_epsilon)
+            
+    def forward(self, inputs):
+        """ Depthwise Separable Convolutional block with depthwise convolution + pointwise convolution
+            + batch normalization + ReLU activation.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        tensor = self.depthwise_conv(inputs)
+        tensor = self.pointwise_conv(tensor)
+        tensor = self.batch_norm(tensor)
+        tensor = self.activation(tensor)
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+            
+        return tensor
+
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
     def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
@@ -364,6 +429,7 @@ class NoOp(nn.Module):
     pass
 
 functions_dict = {'ConvBlock': ConvBlock,
+                  'DepthConvBlock': DepthConvBlock,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
                   'MaxPooling': MaxPooling,
@@ -435,7 +501,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'ResidualV1', 'ResidualV1Pr']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
