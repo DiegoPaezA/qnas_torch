@@ -4,7 +4,7 @@
 echo "Running evolution experiment with config6.txt"
 
 for ((i=1; i<=5; i++)); do
-    exp_path="exp7_adamw_repeat_$i"
+    exp_path="exp8_adamw_repeat_$i"
     
     python run_evolution.py \
         --experiment_path "$exp_path" \
@@ -17,7 +17,7 @@ done
 echo "Running evolution experiment with config7.txt"
 
 for ((i=1; i<=5; i++)); do
-    exp_path="exp7_rms_repeat$i"
+    exp_path="exp8_rms_repeat$i"
     
     python run_evolution.py \
         --experiment_path "$exp_path" \
