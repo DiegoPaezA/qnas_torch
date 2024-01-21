@@ -24,7 +24,16 @@ from torch.cuda.amp import GradScaler
 
 
 TRAIN_TIMEOUT = 5400
-LOGGER = init_log("INFO", name=__name__)
+
+current_directory = os.path.dirname(os.path.dirname(__file__))
+log_directory = os.path.join(current_directory, 'logs')
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+    
+log_file = os.path.join(log_directory, 'train.log')
+LOGGER = init_log("INFO", name=__name__, file_path=log_file)
+
+
 
 def train_epoch(model, criterion, optimizer, data_loader, device, scaler, enabled_mixed_precision):
     model.train()
@@ -114,8 +123,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     
     # Automatic mixed precision training (AMP)
     scaler = GradScaler(enabled=enabled_mixed_precision) 
-    if enabled_mixed_precision:
-        LOGGER.info("Mixed precision training enabled")
+    # if enabled_mixed_precision:
+    #     LOGGER.info("Mixed precision training enabled")
     
     for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device, scaler, enabled_mixed_precision)
@@ -223,6 +232,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     # Train the model in fitness scheme
     try:
         results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device,debug)
+        LOGGER.info(f"Training of model {id_num} finished, best accuracy: {round(results_dict['best_accuracy'], 2)}")
         if debug:
             result = results_dict
             return result
@@ -231,6 +241,13 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
             return_val.value = results_dict['best_accuracy']
         
     except TimeoutError:
+        LOGGER.error("Training timed out. Penalizing the model with accuracy 0.0.")
         #result = 0.0 # Penalize the model if it takes too long to train.
         #return result
         return_val.value = 0.0
+    except MemoryError:
+        LOGGER.error("MemoryError: Out of memory exception. Penalizing the model with accuracy 0.0.")
+        return_val.value = 0.0
+    except Exception as e:
+        LOGGER.error(f"An unexpected error occurred: {e}")
+        raise e
