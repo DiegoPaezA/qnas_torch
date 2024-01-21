@@ -69,6 +69,7 @@ class EvalPopulation(object):
         self.gpus = [f'cuda:{i}' for i in desired_gpus if i < torch.cuda.device_count()]
         self.loader = input.GenericDataLoader(params=self.train_params)
         #mp.set_start_method('fork')  # fork for linux, spawn for windows
+        self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")
         
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
@@ -109,14 +110,18 @@ class EvalPopulation(object):
         train_loader, val_loader = self.loader.get_loader(pin_memory_device=self.gpus[0])
         processes = []
         
+        self.logger.info(f"Going to start fitness of {pop_size} individuals")
+        
         for idx in range(pop_size):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
+            gpu_device = self.gpus[idx%len(self.gpus)]
             process = mp.Process(target=self.run_individuals, args=(generation,
                                                 self.train_params,
                                                 self.fn_dict,
                                                 train_loader,
                                                 val_loader,
-                                                individuals_selected_thread))
+                                                individuals_selected_thread,
+                                                gpu_device))
             process.start()
             processes.append(process)
 
@@ -129,9 +134,9 @@ class EvalPopulation(object):
         return evaluations
             
             
-    def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread):
+    def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread, gpu_device):
         for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
-            self.train_params['device'] = self.gpus[individual%len(self.gpus)]
+            self.train_params['device'] = gpu_device
             train.fitness_calculation(f"{generation}_{individual}",
                                         {**train_params},
                                         fn_dict,
@@ -139,4 +144,4 @@ class EvalPopulation(object):
                                         train_loader,
                                         val_loader, 
                                         return_val)
-            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {return_val.value}")
+            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {round(return_val.value, 4)}")
