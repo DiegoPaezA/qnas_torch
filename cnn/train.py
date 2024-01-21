@@ -246,8 +246,13 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
         #return result
         return_val.value = 0.0
     except MemoryError:
-        LOGGER.error("MemoryError: Out of memory exception. Penalizing the model with accuracy 0.0.")
+        LOGGER.error(f"CUDA out of memory exception, error: {e}")
         return_val.value = 0.0
     except Exception as e:
-        LOGGER.error(f"An unexpected error occurred: {e}")
+        if "out of memory" in str(e):
+            LOGGER.error(f"CUDA out of memory exception, error: {e}")
+            return_val.value = 0.0
+        else:
+            LOGGER.error(f"Exception: {e}")
+            return_val.value = 0.0
         raise e
