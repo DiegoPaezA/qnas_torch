@@ -11,6 +11,7 @@ from cnn import train
 from util import init_log
 import torch
 from cnn import input
+import time
 
 class EvalPopulation(object):
     """
@@ -111,7 +112,7 @@ class EvalPopulation(object):
         processes = []
         
         self.logger.info(f"Going to start fitness of {pop_size} individuals")
-        
+        evol_time_start = time.perf_counter()
         for idx in range(pop_size):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
             gpu_device = self.gpus[idx%len(self.gpus)]
@@ -130,7 +131,11 @@ class EvalPopulation(object):
                     
         for idx, val in enumerate(variables):
             evaluations[idx] = val.value
-        
+            
+        evol_end = time.perf_counter()
+        time_elapsed_min = (evol_end-evol_time_start)/60
+        time_elapsed_sec = (evol_end-evol_time_start)%60
+        self.logger.info(f"Time elapsed for {pop_size} individuals: {time_elapsed_min:.0f}m {time_elapsed_sec:.0f}s")
         return evaluations
             
             
