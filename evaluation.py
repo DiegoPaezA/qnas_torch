@@ -71,6 +71,7 @@ class EvalPopulation(object):
         self.loader = input.GenericDataLoader(params=self.train_params)
         #mp.set_start_method('fork')  # fork for linux, spawn for windows
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")
+        print("\n")
         
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
@@ -111,7 +112,7 @@ class EvalPopulation(object):
         train_loader, val_loader = self.loader.get_loader(pin_memory_device=self.gpus[0])
         processes = []
         
-        self.logger.info(f"Going to start fitness of {pop_size} individuals")
+        self.logger.info(f"Starting the Generation {generation} with {pop_size} individuals")
         evol_time_start = time.perf_counter()
         for idx in range(pop_size):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
