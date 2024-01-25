@@ -8,6 +8,8 @@ Documentation:
     - Automatic mixed precision training (AMP): 
         - https://pytorch.org/docs/stable/amp.html, 
         - https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html#all-together-automatic-mixed-precision
+    - Profiling: Inference time
+        - https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html#using-profiler-to-analyze-execution-time
     
 """
 import os
@@ -20,6 +22,7 @@ from typing import Dict, List, Union, Any
 from cnn import model, input
 from util import create_info_file, init_log
 from torch.cuda.amp import GradScaler
+from torch.profiler import profile, record_function, ProfilerActivity
 
 
 
@@ -154,12 +157,32 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     params['t1'] = time.time()
     params['training_time'] = params['t1'] - params['t0']
     
+    # Measure inference time
+    inference_images = next(iter(val_loader))[0][:10].to(device)
+    
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
+        with record_function("model_inference"):
+            model(inference_images)
+    
+    model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
+    cpu_inference_time = prof.key_averages()[0].cpu_time
+    cuda_inference_time = prof.key_averages()[0].cuda_time
+    
+    params['cuda_inference_time'] = cuda_inference_time
+    params['cpu_inference_time'] = cpu_inference_time
+    params['model_memory_usage'] = model_memory_usage
+    
+    LOGGER.info(f"Cuda Inference time: {cuda_inference_time} microseconds")
+    LOGGER.info(f"Model memory usage: {model_memory_usage} MB")
+    
     create_info_file(params['model_path'], params, 'training_params.txt')
     
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
     training_results['validation_losses'] = validation_losses
     training_results['validation_accuracies'] = validation_accuracies
+    training_results['cuda_inference_time'] = cuda_inference_time # in microseconds
+    training_results['model_memory_usage'] = model_memory_usage # in MB
     training_results['best_accuracy'] = best_accuracy        
     return training_results
 
