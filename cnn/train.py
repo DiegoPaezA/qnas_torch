@@ -17,7 +17,6 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
-from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
 from cnn import model, input
 from util import create_info_file, init_log
@@ -190,7 +189,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 def fitness_calculation(id_num:str, params:Dict[str, Any], 
                         fn_dict:Dict[str, Any], net_list:List[str],
                         train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
-                        return_val,debug:bool=False) -> Dict[str, Union[List[float], float]]:
+                        debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
     This function trains and evaluates a convolutional neural network model using the specified
@@ -260,22 +259,18 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
             result = results_dict
             return result
         else:
-            #result = results_dict['best_accuracy']
-            return_val.value = results_dict['best_accuracy']
+            return results_dict['best_accuracy'], results_dict['cuda_inference_time'], results_dict['model_memory_usage']
         
     except TimeoutError:
         LOGGER.error("Training timed out. Penalizing the model with accuracy 0.0.")
-        #result = 0.0 # Penalize the model if it takes too long to train.
-        #return result
-        return_val.value = 0.0
+        return 0.0, 0.0, 0.0
     except MemoryError:
         LOGGER.error(f"CUDA out of memory exception, error: {e}")
-        return_val.value = 0.0
+        return 0.0, 0.0, 0.0
     except Exception as e:
         if "out of memory" in str(e):
             LOGGER.error(f"CUDA out of memory exception, error: {e}")
-            return_val.value = 0.0
+            return 0.0, 0.0, 0.0
         else:
             LOGGER.error(f"Exception: {e}")
-            return_val.value = 0.0
-        raise e
+            return 0.0, 0.0, 0.0
