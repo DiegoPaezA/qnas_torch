@@ -98,56 +98,70 @@ class EvalPopulation(object):
             If the Dask operations exceed the specified timeout.
         """
         pop_size = len(decoded_nets)
-        evaluations = np.empty(shape=(pop_size, ))
-        
-        variables = [mp.Value('f', 0.00) for _ in range(pop_size)]
-        
-        # create a list of tuples with the individual, the selected thread, the decoded net, the decoded params and the return value    
-        individual_per_thread = [(idx, idx % pop_size, decoded_nets[idx], decoded_params[idx], variables[idx])
-                         for idx in range(len(variables))]
-        
-        # for idx, selected_thread, _, _, _ in individual_per_thread:
-        #     self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
-        
+        evaluations = []
+        results_queue = mp.Queue()
+
+        # create a list of tuples with the individual, the selected thread, the decoded net, the decoded params
+        # and the return value
+        individual_per_thread = [(idx, idx % pop_size, decoded_nets[idx], decoded_params[idx])
+                                for idx in range(pop_size)]
+
         train_loader, val_loader = self.loader.get_loader(pin_memory_device=self.gpus[0])
         processes = []
-        
+
         self.logger.info(f"Starting the Generation {generation} with {pop_size} individuals")
         evol_time_start = time.perf_counter()
+
         for idx in range(pop_size):
-            individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
-            gpu_device = self.gpus[idx%len(self.gpus)]
+            individuals_selected_thread = list(filter(lambda x: x[1] == idx, individual_per_thread))
+            gpu_device = self.gpus[idx % len(self.gpus)]
             process = mp.Process(target=self.run_individuals, args=(generation,
-                                                self.train_params,
-                                                self.fn_dict,
-                                                train_loader,
-                                                val_loader,
-                                                individuals_selected_thread,
-                                                gpu_device))
+                                                                self.train_params,
+                                                                self.fn_dict,
+                                                                train_loader,
+                                                                val_loader,
+                                                                individuals_selected_thread,
+                                                                gpu_device,
+                                                                results_queue))
             process.start()
             processes.append(process)
 
         for p in processes:
             p.join()
-                    
-        for idx, val in enumerate(variables):
-            evaluations[idx] = val.value
-            
+
+        while not results_queue.empty():
+            result = results_queue.get()
+            evaluations.append(result['accuracy'])
+
         evol_end = time.perf_counter()
-        time_elapsed_min = (evol_end-evol_time_start)/60
-        time_elapsed_sec = (evol_end-evol_time_start)%60
+        time_elapsed_min = (evol_end - evol_time_start) / 60
+        time_elapsed_sec = (evol_end - evol_time_start) % 60
         self.logger.info(f"Time elapsed for {pop_size} individuals: {time_elapsed_min:.0f}m {time_elapsed_sec:.0f}s")
-        return evaluations
+        
+        return np.array(evaluations)
             
             
-    def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread, gpu_device):
-        for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
+    def run_individuals(self, generation, train_params, fn_dict, train_loader, val_loader,
+                        individuals_selected_thread, gpu_device, results_queue):
+        for individual, selected_thread, decoded_net, decoded_params in individuals_selected_thread:
             self.train_params['device'] = gpu_device
-            train.fitness_calculation(f"{generation}_{individual}",
-                                        {**train_params},
-                                        fn_dict,
-                                        decoded_net,
-                                        train_loader,
-                                        val_loader, 
-                                        return_val)
-            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {round(return_val.value, 4)}")
+            accuracy, inference_time, memory_consumption = train.fitness_calculation(
+                f"{generation}_{individual}",
+                {**train_params},
+                fn_dict,
+                decoded_net,
+                train_loader,
+                val_loader,
+            )
+            result = {
+                'individual': individual,
+                'selected_thread': selected_thread,
+                'accuracy': accuracy,
+                'inference_time': inference_time,
+                'memory_consumption': memory_consumption,
+            }
+            results_queue.put(result)
+            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with "
+                             f"Accuracy: {round(accuracy, 4)}, Inference Time: {round(inference_time, 4)} uS, "
+                             f"Memory Consumption: {round(memory_consumption, 4)} MB")
+
