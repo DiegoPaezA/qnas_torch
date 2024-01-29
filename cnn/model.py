@@ -9,6 +9,41 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 
+class SEBlock(nn.Module):
+    """
+    Squeeze-and-Excitation (SE) Block.
+
+    Args:
+        in_channels (int): Number of input channels.
+        reduction_ratio (int, optional): Reduction ratio for the SE block. Default is 16.
+    """
+    def __init__(self, in_channels, reduction_ratio=16):
+        """
+        Initializes the Squeeze-and-Excitation block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            reduction_ratio (int, optional): Reduction ratio for the SE block. Default is 16.
+        """
+        super(SEBlock, self).__init__()
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1)
+        self.fc2 = nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1)
+
+    def forward(self, x):
+        """
+        Forward pass through the Squeeze-and-Excitation block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying the SE block.
+        """
+        x_se = self.pool(x)
+        x_se = F.relu(self.fc1(x_se))
+        x_se = torch.sigmoid(self.fc2(x_se))
+        return x * x_se
    
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
@@ -68,6 +103,40 @@ class ConvBlock(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
             
         return tensor
+
+class SEConvBlock(nn.Module):
+    """
+    Squeeze-and-Excitation Convolution Block.
+    """
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
+        """
+        Initializes the Squeeze-and-Excitation Convolution block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            kernel_size (int, optional): Size of the convolutional kernel. Default is 3.
+            stride (int, optional): Stride for the convolution. Default is 1.
+            padding (int, optional): Padding for the convolution. Default is 1.
+            reduction_ratio (int, optional): Reduction ratio for the SE block. Default is 16.
+        """
+        super(SEConvBlock, self).__init__()
+        self.conv_block = ConvBlock(kernel, in_channels, filters, strides, mu, epsilon, channels_last)
+        self.se_block = SEBlock(filters, reduction_ratio)
+
+    def forward(self, inputs):
+        """
+        Forward pass through the Squeeze-and-Excitation Convolution block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying the Squeeze-and-Excitation Convolution block.
+        """
+        conv_output = self.conv_block(inputs)
+        se_output = self.se_block(conv_output)
+        return se_output
 
 class DepthConvBlock(nn.Module):
     """ Depth Wise Separable Convolutional Block with Conv -> DepthwiseConv -> BatchNorm -> ReLU """
@@ -133,6 +202,44 @@ class DepthConvBlock(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
             
         return tensor
+
+class SEDepthConvBlock(nn.Module):
+    """
+    Squeeze-and-Excitation Depthwise Separable Convolution Block.
+    """
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, reduction_ratio=16):
+        """
+        Initializes the Squeeze-and-Excitation Depthwise Separable Convolution block.
+
+        Args:
+            in_channels (int): Number of input channels.
+            out_channels (int): Number of output channels.
+            kernel_size (int, optional): Size of the convolutional kernel. Default is 3.
+            stride (int, optional): Stride for the convolution. Default is 1.
+            padding (int, optional): Padding for the convolution. Default is 1.
+            reduction_ratio (int, optional): Reduction ratio for the SE block. Default is 16.
+        """
+        super(SEDepthConvBlock, self).__init__()
+
+        self.depth_conv_block = DepthConvBlock(in_channels, out_channels, kernel_size, stride, padding)
+        self.se_block = SEBlock(out_channels, reduction_ratio)
+
+    def forward(self, x):
+        """
+        Forward pass through the Squeeze-and-Excitation Depthwise Separable Convolution block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying the Squeeze-and-Excitation Depthwise Separable Convolution block.
+        """
+        x = self.depth_conv_block(x)
+
+        # Apply SE block for channel-wise attention
+        x = self.se_block(x)
+
+        return x
 
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
@@ -430,6 +537,8 @@ class NoOp(nn.Module):
 
 functions_dict = {'ConvBlock': ConvBlock,
                   'DepthConvBlock': DepthConvBlock,
+                  'SEConvBlock': SEConvBlock,
+                  'SEDepthConvBlock': SEDepthConvBlock,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
                   'MaxPooling': MaxPooling,
@@ -501,7 +610,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'ResidualV1', 'ResidualV1Pr']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'SEDepthConvBlock', 'ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
