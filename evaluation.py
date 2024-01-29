@@ -100,7 +100,8 @@ class EvalPopulation(object):
         pop_size = len(decoded_nets)
         evaluations = np.empty(shape=(pop_size, ))
         
-        variables = [mp.Value('f', 0.0000) for _ in range(pop_size)]
+        #variables = [mp.Value('f', 0.0000) for _ in range(pop_size)]
+        variables = [mp.Array('f', 3) for _ in range(pop_size)]
         
         # create a list of tuples with the individual, the selected thread, the decoded net, the decoded params and the return value    
         individual_per_thread = [(idx, idx % pop_size, decoded_nets[idx], decoded_params[idx], variables[idx])
@@ -131,7 +132,8 @@ class EvalPopulation(object):
             p.join()
                     
         for idx, val in enumerate(variables):
-            evaluations[idx] = val.value
+            evaluations[idx] = val[0] # Accuracy
+            #evaluations[idx] = val.value
             
         evol_end = time.perf_counter()
         time_elapsed_min = (evol_end-evol_time_start)/60
@@ -150,5 +152,8 @@ class EvalPopulation(object):
                                         train_loader,
                                         val_loader, 
                                         return_val)
-            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with {round(return_val.value, 4)}")
+            self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with "
+                             f"Accuracy: {round(return_val[0], 4)}, Memory Consumption: {round(return_val[1], 4)} MB, "
+                             f"Inference Time: {round(return_val[1], 4)} uS")
+            
 

@@ -260,19 +260,31 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
             result = results_dict
             return result
         else:
-            return_val.value = results_dict['best_accuracy']
+            #return_val.value = results_dict['best_accuracy']
+            return_val[0] = results_dict['best_accuracy']
+            return_val[1] = results_dict['model_memory_usage']
+            return_val[2] = results_dict['cuda_inference_time']
         
     except TimeoutError:
         LOGGER.error("Training timed out. Penalizing the model with accuracy 0.0.")
-        return_val.value = 0.0
+        #return_val.value = 0.0
+        return_val[0] = 0.0
+        return_val[1] = 0.0
+        return_val[2] = 0.0
     except MemoryError:
         LOGGER.error(f"CUDA out of memory exception, error: {e}")
-        return_val.value = 0.0
+        return_val[0] = 0.0
+        return_val[1] = 0.0
+        return_val[2] = 0.0
     except Exception as e:
         if "out of memory" in str(e):
             LOGGER.error(f"CUDA out of memory exception, error: {e}")
-            return_val.value = 0.0
+            return_val[0] = 0.0
+            return_val[1] = 0.0
+            return_val[2] = 0.0
         else:
             LOGGER.error(f"Exception: {e}")
-            return_val.value = 0.0
+            return_val[0] = 0.0
+            return_val[1] = 0.0
+            return_val[2] = 0.0
         raise e
