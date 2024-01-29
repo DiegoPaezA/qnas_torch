@@ -170,6 +170,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     params['cuda_inference_time'] = cuda_inference_time
     params['cpu_inference_time'] = cpu_inference_time
     params['model_memory_usage'] = model_memory_usage
+    params['best_accuracy'] = best_accuracy
     
     LOGGER.info(f"Cuda Inference time: {cuda_inference_time} microseconds")
     LOGGER.info(f"Model memory usage: {model_memory_usage} MB")
@@ -189,7 +190,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 def fitness_calculation(id_num:str, params:Dict[str, Any], 
                         fn_dict:Dict[str, Any], net_list:List[str],
                         train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
-                        debug:bool=False) -> Dict[str, Union[List[float], float]]:
+                        return_val,debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
     This function trains and evaluates a convolutional neural network model using the specified
@@ -259,18 +260,19 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
             result = results_dict
             return result
         else:
-            return results_dict['best_accuracy'], results_dict['cuda_inference_time'], results_dict['model_memory_usage']
+            return_val.value = results_dict['best_accuracy']
         
     except TimeoutError:
         LOGGER.error("Training timed out. Penalizing the model with accuracy 0.0.")
-        return 0.0, 0.0, 0.0
+        return_val.value = 0.0
     except MemoryError:
         LOGGER.error(f"CUDA out of memory exception, error: {e}")
-        return 0.0, 0.0, 0.0
+        return_val.value = 0.0
     except Exception as e:
         if "out of memory" in str(e):
             LOGGER.error(f"CUDA out of memory exception, error: {e}")
-            return 0.0, 0.0, 0.0
+            return_val.value = 0.0
         else:
             LOGGER.error(f"Exception: {e}")
-            return 0.0, 0.0, 0.0
+            return_val.value = 0.0
+        raise e
