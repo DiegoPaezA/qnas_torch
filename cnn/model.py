@@ -207,22 +207,30 @@ class SEDepthConvBlock(nn.Module):
     """
     Squeeze-and-Excitation Depthwise Separable Convolution Block.
     """
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, reduction_ratio=16):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
         """
         Initializes the Squeeze-and-Excitation Depthwise Separable Convolution block.
 
         Args:
-            in_channels (int): Number of input channels.
-            out_channels (int): Number of output channels.
-            kernel_size (int, optional): Size of the convolutional kernel. Default is 3.
-            stride (int, optional): Stride for the convolution. Default is 1.
-            padding (int, optional): Padding for the convolution. Default is 1.
-            reduction_ratio (int, optional): Reduction ratio for the SE block. Default is 16.
+            in_channel : int
+                Represents the number of channels in the input image (default 3 for RGB)
+            kernel : int
+                Represents the size of the convolutional window (3 means [3,3])
+            filters : int
+                Number of filters
+            strides : int
+                Represents the stride of the convolutional window (3 means [3,3])
+            mu : float
+                Mean for the batch normalization
+            epsilon : float
+                Epsilon for the batch normalization
+            reduction_ratio : int, optional 
+                Reduction ratio for the SE block. Default is 16.
         """
         super(SEDepthConvBlock, self).__init__()
-
-        self.depth_conv_block = DepthConvBlock(in_channels, out_channels, kernel_size, stride, padding)
-        self.se_block = SEBlock(out_channels, reduction_ratio)
+        
+        self.depth_conv_block = DepthConvBlock(kernel,in_channels,filters,strides,mu,epsilon,channels_last)
+        self.se_block = SEBlock(filters, reduction_ratio=reduction_ratio) # in_channels = output size of depth_conv_block (filters)
 
     def forward(self, x):
         """
