@@ -9,6 +9,102 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 
+class ChannelAttention(nn.Module):
+    """
+    Channel Attention Module (CAM) for capturing channel-wise dependencies.
+
+    Args:
+        in_channels (int): Number of input channels.
+        reduction_ratio (int, optional): Reduction ratio for the channel attention block. Default is 16.
+    """
+
+    def __init__(self, in_channels, reduction_ratio=16):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1)
+
+    def forward(self, x):
+        """
+        Forward pass through the Channel Attention Module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying channel attention.
+        """
+        avg_pool = self.avg_pool(x)
+        max_pool = self.max_pool(x)
+        avg_out = self.fc2(self.relu1(self.fc1(avg_pool)))
+        max_out = self.fc2(self.relu1(self.fc1(max_pool)))
+        channel_attention = torch.sigmoid(avg_out + max_out)
+
+        return channel_attention
+
+class SpatialAttention(nn.Module):
+    """
+    Spatial Attention Module (SAM) for capturing spatial dependencies.
+
+    Args:
+        kernel_size (int, optional): Size of the convolutional kernel for spatial attention. Default is 7.
+    """
+
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        self.conv = nn.Conv2d(2, 1, kernel_size=kernel_size, padding=kernel_size // 2)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        """
+        Forward pass through the Spatial Attention Module.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying spatial attention.
+        """
+        avg_pool = torch.mean(x, dim=1, keepdim=True)
+        max_pool, _ = torch.max(x, dim=1, keepdim=True)
+        pooled_tensor = torch.cat([avg_pool, max_pool], dim=1)
+        spatial_attention = self.sigmoid(self.conv(pooled_tensor))
+
+        return spatial_attention
+
+class CBAMBlock(nn.Module):
+    """
+    Convolutional Block Attention Module (CBAM) combining Channel Attention Module (CAM)
+    and Spatial Attention Module (SAM).
+
+    Args:
+        in_channels (int): Number of input channels.
+        reduction_ratio (int, optional): Reduction ratio for the channel attention block. Default is 16.
+        kernel_size (int, optional): Size of the convolutional kernel for spatial attention. Default is 7.
+    """
+
+    def __init__(self, in_channels, reduction_ratio=16, kernel_size=7):
+        super(CBAMBlock, self).__init__()
+        self.channel_attention = ChannelAttention(in_channels, reduction_ratio)
+        self.spatial_attention = SpatialAttention(kernel_size)
+
+    def forward(self, x):
+        """
+        Forward pass through the CBAM block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying CBAM.
+        """
+        channel_attention = self.channel_attention(x)
+        spatial_attention = self.spatial_attention(x)
+        x = x * channel_attention * spatial_attention
+        return x
+
 class SEBlock(nn.Module):
     """
     Squeeze-and-Excitation (SE) Block.
@@ -138,6 +234,39 @@ class SEConvBlock(nn.Module):
         se_output = self.se_block(conv_output)
         return se_output
 
+class CBAMConvBlock(nn.Module):
+    """
+    Convolutional Block with Convolutional Block Attention Module (CBAM).
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        kernel (int, optional): Size of the convolutional kernel. Default is 3.
+        stride (int, optional): Stride of the convolutional operation. Default is 1.
+        padding (int, optional): Padding for the convolutional operation. Default is 1.
+        reduction_ratio (int, optional): Reduction ratio for the channel attention block. Default is 16.
+    """
+
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
+        super(CBAMConvBlock, self).__init__()
+
+        self.conv_block = ConvBlock(kernel, in_channels, filters, strides,mu, epsilon, channels_last)
+        self.cbam_block = CBAMBlock(filters, reduction_ratio)
+
+    def forward(self, x):
+        """
+        Forward pass through the CBAM Convolutional Block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying CBAM Convolutional Block.
+        """
+        x = self.conv_block(x)
+        x = self.cbam_block(x)
+        return x
+
 class DepthConvBlock(nn.Module):
     """ Depth Wise Separable Convolutional Block with Conv -> DepthwiseConv -> BatchNorm -> ReLU """
 
@@ -249,6 +378,39 @@ class SEDepthConvBlock(nn.Module):
 
         return x
 
+class CBAMDepthConvBlock(nn.Module):
+    """
+    Depthwise Separable Convolution Block with Convolutional Block Attention Module (CBAM).
+
+    Args:
+        in_channels (int): Number of input channels.
+        filters (int): Number of filters (output channels).
+        kernel (int, optional): Size of the convolutional kernel. Default is 3.
+        stride (int, optional): Stride of the convolutional operation. Default is 1.
+        padding (int, optional): Padding for the convolutional operation. Default is 1.
+        reduction_ratio (int, optional): Reduction ratio for the channel attention block. Default is 16.
+    """
+
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
+        super(CBAMDepthConvBlock, self).__init__()
+
+        self.depth_conv_block = DepthConvBlock(kernel,in_channels,filters,strides,mu,epsilon,channels_last)
+        self.cbam_block = CBAMBlock(filters, reduction_ratio)
+
+    def forward(self, x):
+        """
+        Forward pass through the CBAM Convolutional Block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying CBAM Convolutional Block.
+        """
+        x = self.depth_conv_block(x)
+        x = self.cbam_block(x)
+        return x
+    
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
     def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
