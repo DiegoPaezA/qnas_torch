@@ -1,6 +1,6 @@
 #!/bin/bash
 
-Run the evolution experiment multiple times
+# Run the evolution experiment multiple times
 echo "Running evolution experiment with config10.txt"
 
 for ((i=1; i<=5; i++)); do
