@@ -1,0 +1,82 @@
+# Configuration file 2
+
+QNAS:
+    crossover_rate: 0.5
+    max_generations: 100
+    max_num_nodes: 20
+    num_quantum_ind: 4
+    penalize_number: 3
+    repetition: 3
+    replace_method: best
+    update_quantum_gen: 5
+    update_quantum_rate: 0.1
+    save_data_freq: 10
+
+    params_ranges:
+        decay: 0.9
+        learning_rate: 0.001
+        momentum: 0.0
+        weight_decay: 1.0e-4
+
+    function_dict:  {'conv_1_1_32':  {'function': 'ConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'conv_1_1_64':  {'function': 'ConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'conv_3_1_32':  {'function': 'ConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'conv_3_1_64':  {'function': 'ConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'conv_3_1_128': {'function': 'ConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/36.0},
+                     'conv_3_1_256': {'function': 'ConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/36.0},
+                     'dconv_1_1_32':  {'function': 'DepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'dconv_1_1_64':  {'function': 'DepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'dconv_3_1_32':  {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'dconv_3_1_64':  {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'dconv_3_1_128': {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/36.0},
+                     'dconv_3_1_256': {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/36.0},
+                     'seconv_1_1_32':  {'function': 'SEConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'seconv_1_1_64':  {'function': 'SEConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'seconv_3_1_32':  {'function': 'SEConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'seconv_3_1_64':  {'function': 'SEConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'seconv_3_1_128': {'function': 'SEConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/36.0},
+                     'seconv_3_1_256': {'function': 'SEConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/36.0},
+                     'sedconv_1_1_32':  {'function': 'SEDepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'sedconv_1_1_64':  {'function': 'SEDepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'sedconv_3_1_32':  {'function': 'SEDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'sedconv_3_1_64':  {'function': 'SEDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'sedconv_3_1_128': {'function': 'SEDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/36.0},
+                     'sedconv_3_1_256': {'function': 'SEDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/36.0},
+                     'cbamconv_1_1_32':  {'function': 'CBAMConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'cbamconv_1_1_64':  {'function': 'CBAMConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'cbamconv_3_1_32':  {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'cbamconv_3_1_64':  {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'cbamconv_3_1_128': {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/36.0},
+                     'cbamconv_3_1_256': {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/36.0},
+                     'cbamdconv_1_1_32':  {'function': 'CBAMDepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'cbamdconv_1_1_64':  {'function': 'CBAMDepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'cbamdconv_3_1_32':  {'function': 'CBAMDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/36.0},
+                     'cbamdconv_3_1_64':  {'function': 'CBAMDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/36.0},
+                     'cbamdconv_3_1_128': {'function': 'CBAMDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/36.0},
+                     'cbamdconv_3_1_256': {'function': 'CBAMDepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/36.0},
+                     'max_pool_2_2': {'function': 'MaxPooling', 'params': {'kernel': 2, 'strides': 2}, 'prob': 1.0/3.0/2.0},
+                     'avg_pool_2_2': {'function': 'AvgPooling', 'params': {'kernel': 2, 'strides': 2}, 'prob': 1.0/3.0/2.0},
+                     'no_op':        {'function': 'NoOp', 'params': {}, 'prob': 1.0/3.0}}
+
+train:
+    batch_size: 256
+    eval_batch_size: 1000
+    max_epochs: 50
+    epochs_to_eval: 5 
+    optimizer: AdamW
+    mixed_precision: True
+    available_gpus: [0, 2] # gpu0, gpu1, gpu2 [0, 1, 2]
+    device: cuda:0
+
+    # Dataset
+    dataset: Cifar10
+    data_augmentation: True
+    subtract_mean: True
+    limit_data: True
+    limit_data_value: 10000
+    num_workers: 8
+
+    # Tensorflow
+    save_checkpoints_epochs: 10
+    save_summary_epochs: 0.25
+    threads: 0
