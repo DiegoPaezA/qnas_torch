@@ -1,27 +1,38 @@
 #!/bin/bash
 
-# Run the evolution experiment multiple times
-echo "Running evolution experiment with config2.txt"
+Run the evolution experiment multiple times
+echo "Running evolution experiment with config10.txt"
 
 for ((i=1; i<=5; i++)); do
-    exp_path="exp10_adamw_repeat_$i"
+    exp_path="exp12_adamw_repeat_$i"
     
     python run_evolution.py \
         --experiment_path "$exp_path" \
-        --config_file 'config_files/config2.txt' \
+        --config_file 'config_files/config10.txt' \
         --data_path cifar10_data \
         --log_level INFO
 done
 
-# Run the evolution experiment multiple times with different config files rmsprop
-# echo "Running evolution experiment with config7.txt"
+echo "Running evolution experiment with config11.txt"
 
-# for ((i=1; i<=5; i++)); do
-#     exp_path="exp9_rms_repeat$i"
+for ((i=1; i<=5; i++)); do
+    exp_path="exp13_adamw_repeat_$i"
     
-#     python run_evolution.py \
-#         --experiment_path "$exp_path" \
-#         --config_file 'config_files/config7.txt' \
-#         --data_path cifar10_data \
-#         --log_level INFO
-# done
+    python run_evolution.py \
+        --experiment_path "$exp_path" \
+        --config_file 'config_files/config11.txt' \
+        --data_path cifar10_data \
+        --log_level INFO
+done
+
+echo "Running evolution experiment with config12.txt"
+
+for ((i=1; i<=5; i++)); do
+    exp_path="exp14_adamw_repeat_$i"
+    
+    python run_evolution.py \
+        --experiment_path "$exp_path" \
+        --config_file 'config_files/config12.txt' \
+        --data_path cifar10_data \
+        --log_level INFO
+done
