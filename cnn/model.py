@@ -709,6 +709,8 @@ functions_dict = {'ConvBlock': ConvBlock,
                   'DepthConvBlock': DepthConvBlock,
                   'SEConvBlock': SEConvBlock,
                   'SEDepthConvBlock': SEDepthConvBlock,
+                  'CBAMConvBlock': CBAMConvBlock,
+                  'CBAMDepthConvBlock': CBAMDepthConvBlock,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
                   'MaxPooling': MaxPooling,
@@ -780,7 +782,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'SEDepthConvBlock', 'ResidualV1', 'ResidualV1Pr']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'SEDepthConvBlock', 'CBAMConvBlock', 'CBAMDepthConvBlock','ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
