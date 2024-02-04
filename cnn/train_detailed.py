@@ -11,14 +11,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 from tqdm.notebook import tqdm
-from cnn.metrics import *
 from typing import Dict, List, Union, Any
 from sklearn.metrics import confusion_matrix
 from cnn import model, input
-from util import create_info_file
+from util import create_info_file, init_log
+from torch.profiler import profile, record_function, ProfilerActivity
 
-
-TRAIN_TIMEOUT = 5400
+current_directory = os.path.dirname(os.path.dirname(__file__))
+log_directory = os.path.join(current_directory, 'logs')
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+    
+log_file = os.path.join(log_directory, 'retrain.log')
+LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
 def realese_gpu_memory(gpu_name='cuda:0'):
     """
@@ -180,8 +185,10 @@ def train(model: torch.nn.Module,
 
 
 def train_and_eval(params: Dict[str, Any], 
-                    fn_dict: Dict[str, Any], 
-                    net_list: List[str]) -> Dict[str, Union[List[float], float]]:
+                    fn_dict: Dict[str, Any],net_list:List[str],
+                    train_loader:torch.utils.data.DataLoader, 
+                    val_loader:torch.utils.data.DataLoader,
+                    test_loader:torch.utils.data.DataLoader) -> Dict[str, Union[List[float], float]]:
     """
     This function retrains and evaluates a convolutional neural network model using the specified
     configuration.
@@ -205,42 +212,29 @@ def train_and_eval(params: Dict[str, Any],
         - 'confusion_matrix' (numpy.ndarray): Confusion matrix on the test set.
     """
     
-    
+    device = params['device']
+    params['net_list'] = net_list
     model_path = os.path.join(params['experiment_path'], params['retrain_folder'])
     if not os.path.exists(model_path):
         os.makedirs(model_path)
     params['model_path'] = model_path
-    # Load data
-    if params['dataset'] == 'Cifar10':
-        
-        data_info = input.cifar10_info
-        data_path = params['data_path']
-        
-        train_loader, val_loader = input.CIFAR10_loader(data_path,
-                                                        for_train=True, 
-                                                        data_aug=params['data_augmentation'],
-                                                        batch_size=params['batch_size'],
-                                                        eval_batch_size=params['eval_batch_size'])
-        test_loader = input.CIFAR10_loader(data_path,
-                                             for_train=False,
-                                             eval_batch_size=params['test_batch_size'])
-        
-    elif params['dataset'] == 'Cifar100':
-        data_info = input.cifar100_info
+    
+    LOGGER.info(f"Retraining model with the following parameters: {params}")
+    # Load data information
+    dataset_info = input.available_datasets[params['dataset'].lower()]
+    
 
-    model_net = model.NetworkGraph(num_classes=data_info["num_classes"], mu=0.99)
-    
+    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
-    
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
     params['model_net'] = model_net
     params['net_list'] = net_list
-    params['num_classes'] = data_info["num_classes"]
+    params['num_classes'] = dataset_info["num_classes"]
 
     device = params['device']
     
-    # Load the model_net to the GPU
+    # Add the fully connected layer to the model
     inputs, _ = next(iter(train_loader))
     _ = model_net(inputs)
     model_net.to(device)
@@ -254,7 +248,7 @@ def train_and_eval(params: Dict[str, Any],
     elif params['optimizer'] == 'AdamW':
         optimizer = torch.optim.AdamW(model_net.parameters())
     else:
-        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'], momentum=0.9)
+        optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'])
 
     # Training time start counting here.
     params['t0'] = time.time()
