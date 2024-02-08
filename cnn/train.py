@@ -222,6 +222,8 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
         os.makedirs(model_path)
     
     params['model_path'] = model_path
+    params['generation'] = id_num.split('_')[0]
+    params['individual'] = id_num.split('_')[1]
     
     LOGGER.info(f"Training model {id_num} on device {device} ...")
     
