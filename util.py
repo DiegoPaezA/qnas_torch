@@ -70,7 +70,7 @@ def check_file_exists(file_path):
         return True
     else:
         return False
-    
+        
 def plot_training_history(results_dict:dict, params:dict, retrain:bool=False):
     """ Plot the training history of a model.
     
@@ -158,12 +158,13 @@ def check_files(exp_path):
     Args:
         exp_path: (str) path to the experiment folder.
     """
-
+    print(exp_path)
     if not os.path.exists(exp_path):
         raise OSError('User must provide a valid \"--experiment_path\" to continue '
                       'evolution or to retrain a model.')
-
-    file_path = os.path.join(exp_path, 'data_QNAS.pkl')
+    best_experiment_folders = [f.path for f in os.scandir(exp_path) if f.is_dir()]
+    
+    file_path = os.path.join(best_experiment_folders[0], 'training_params.txt')
 
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:

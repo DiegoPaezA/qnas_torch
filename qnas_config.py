@@ -9,6 +9,8 @@ import os
 from collections import OrderedDict
 
 import numpy as np
+import yaml
+import re
 
 from chromosome import QChromosomeNetwork, QChromosomeParams
 from cnn import model, input
@@ -278,38 +280,73 @@ class ConfigParameters(object):
         self.QNAS_spec['params_ranges'] = eval(self.QNAS_spec['params_ranges'])
         self.fn_dict = previous_params_file['fn_dict']
 
-    def load_evolved_data(self, generation=None, individual=0):
-        """ Read the yaml log *self.files_spec['data_file']* and get values from the individual
-            specified by *generation* and *individual*.
+    # def load_evolved_data(self, generation=None, individual=0):
+    #     """ Read the yaml log *self.files_spec['data_file']* and get values from the individual
+    #         specified by *generation* and *individual*.
 
-        Args:
-            generation: (int) generation number from which data will be loaded. If None, loads
-                the last generation data.
-            individual: (int) number of the classical individual to be loaded. If no number is
-                specified, individual 0 is loaded (the one with highest fitness on the given
-                *generation*.
+    #     Args:
+    #         generation: (int) generation number from which data will be loaded. If None, loads
+    #             the last generation data.
+    #         individual: (int) number of the classical individual to be loaded. If no number is
+    #             specified, individual 0 is loaded (the one with highest fitness on the given
+    #             *generation*.
+    #     """
+
+    #     log_data = load_pkl(self.files_spec['data_file'])
+
+    #     if generation is None:
+    #         generation = max(log_data.keys())
+
+    #     log_data = log_data[generation]
+
+    #     params_pop = log_data['params_pop']
+    #     net_pop = log_data['net_pop']
+
+    #     assert individual < net_pop.shape[0], \
+    #         "The individual number cannot be bigger than the size of the population!"
+
+    #     params = QChromosomeParams(
+    #             params_ranges=self.QNAS_spec['params_ranges']).decode(params_pop[individual])
+    #     net = QChromosomeNetwork(
+    #             fn_list=self.QNAS_spec['fn_list'],
+    #             max_num_nodes=log_data['num_net_nodes']).decode(net_pop[individual])
+
+    #     self.evolved_params = {'params': params, 'net': net}
+    
+    def load_evolved_data(self, experiment_path: str):
+        """
+        Loads evolved data from the specified experiment path.
+
+        Parameters:
+        - experiment_path (str): The path to the experiment folder containing evolved data.
+
+        Returns:
+        None
+
+        This method reads the evolved data from the best-performing experiment folder within the specified path.
+        It extracts information such as neural network details, generation, and individual from the 'training_params.txt' file.
+
+        If the data is in an old format (generation and individual not specified in 'training_params.txt'),
+        it attempts to extract them from the folder name using a regular expression.
+
+        The extracted information is stored in the 'evolved_params' attribute of the class.
+
+        Note: This method assumes a specific folder and file structure for evolved data.
         """
 
-        log_data = load_pkl(self.files_spec['data_file'])
+        best_experiment_folders = [f.path for f in os.scandir(experiment_path) if f.is_dir()]
+        with open(os.path.join(best_experiment_folders[0], 'training_params.txt'), 'r') as file:
+                best_individual_info = yaml.safe_load(file)
+        net_list = best_individual_info.get('net_list', [])
+        generation = best_individual_info.get('generation', 0)
+        individual = best_individual_info.get('individual', 0)
+        
+        if generation == 0 and individual == 0: # only for old format
+                matches = re.search(r'(\d+)_(\d+)$', best_experiment_folders[0])
+                generation = int(matches.group(1))
+                individual = int(matches.group(2))
 
-        if generation is None:
-            generation = max(log_data.keys())
-
-        log_data = log_data[generation]
-
-        params_pop = log_data['params_pop']
-        net_pop = log_data['net_pop']
-
-        assert individual < net_pop.shape[0], \
-            "The individual number cannot be bigger than the size of the population!"
-
-        params = QChromosomeParams(
-                params_ranges=self.QNAS_spec['params_ranges']).decode(params_pop[individual])
-        net = QChromosomeNetwork(
-                fn_list=self.QNAS_spec['fn_list'],
-                max_num_nodes=log_data['num_net_nodes']).decode(net_pop[individual])
-
-        self.evolved_params = {'params': params, 'net': net}
+        self.evolved_params = {'params': None, 'net': net_list}
 
     def override_train_params(self, new_params_dict):
         """ Override *self.train_spec* parameters with the ones in *new_params_dict*. Update
