@@ -148,7 +148,7 @@ class GenericDataLoader:
       test_loader = DataLoader(
         test_dataset,
         batch_size=self.params['eval_batch_size'],
-        num_workers=0,
+        num_workers=self.params['num_workers'],
         shuffle=False,
         pin_memory=True,
         pin_memory_device=pin_memory_device)
