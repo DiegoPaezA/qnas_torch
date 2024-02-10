@@ -170,7 +170,6 @@ def check_files(exp_path):
     Args:
         exp_path: (str) path to the experiment folder.
     """
-    print(exp_path)
     if not os.path.exists(exp_path):
         raise OSError('User must provide a valid \"--experiment_path\" to continue '
                       'evolution or to retrain a model.')
