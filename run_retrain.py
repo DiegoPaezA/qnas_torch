@@ -20,7 +20,7 @@ def main(**args):
     check_files(args['experiment_path'])
 
     # Get all parameters
-    logger.info(f"Getting parameters from evolution ...")
+    logger.info(f"Retraining evolved model {experiment_path} ...")
     config = cfg.ConfigParameters(args, phase='retrain')
     config.get_parameters()
     config.load_evolved_data(experiment_path=experiment_path)
