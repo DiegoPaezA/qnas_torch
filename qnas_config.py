@@ -346,7 +346,7 @@ class ConfigParameters(object):
                 generation = int(matches.group(1))
                 individual = int(matches.group(2))
 
-        self.evolved_params = {'params': None, 'net': net_list}
+        self.evolved_params = {'params': None, 'net': net_list, 'generation': generation, 'individual': individual}
 
     def override_train_params(self, new_params_dict):
         """ Override *self.train_spec* parameters with the ones in *new_params_dict*. Update
