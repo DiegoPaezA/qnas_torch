@@ -147,7 +147,8 @@ def train(model: torch.nn.Module,
 
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
 
-    for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
+    #for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
+    for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
         training_losses.append(train_loss)
         training_accuracies.append(train_accuracy)
@@ -161,12 +162,14 @@ def train(model: torch.nn.Module,
             torch.save(model.state_dict(), best_model_path)
             create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
 
-        if epoch % 10 == 0:
-            print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
+        if epoch % 50 == 0:
+            LOGGER.info(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
+            #print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
     test_loss, test_accuracy, confusion_matrix = evaluate(model, criterion, test_loader, device, test=True)
     
-    print(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
+    LOGGER.info(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
+    #print(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
             
     params['t1'] = time.time()
     
@@ -214,12 +217,12 @@ def train_and_eval(params: Dict[str, Any],
     
     device = params['device']
     params['net_list'] = net_list
-    model_path = os.path.join(params['experiment_path'], params['retrain_folder'])
+    model_path = os.path.join(params['experiment_path'])
     if not os.path.exists(model_path):
         os.makedirs(model_path)
     params['model_path'] = model_path
     
-    LOGGER.info(f"Retraining model with the following parameters: {params}")
+    LOGGER.info(f"Start retraining of the experiment: {params['experiment_path']}")
     # Load data information
     dataset_info = input.available_datasets[params['dataset'].lower()]
     
@@ -253,8 +256,15 @@ def train_and_eval(params: Dict[str, Any],
     # Training time start counting here.
     params['t0'] = time.time()
     
-    # Train the model in retreining mode
-    results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params, device)
+    try:
+        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params, device)
+    except Exception as e:
+        if "out of memory" in str(e):
+            LOGGER.error(f"Out of memory error: {e}")
+            results_dict = None
+        else:
+            LOGGER.error(f"An error occurred during training: {e}")
+            results_dict = None
     
     realese_gpu_memory(gpu_name=params['device'])
     
