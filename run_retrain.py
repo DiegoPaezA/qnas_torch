@@ -35,7 +35,7 @@ def main(**args):
 
     # Retrain model for the number of repetitions
     for i in range(1, args['num_repetitions']+1):
-        logger.info(f"Retraining repetition {i} ...")
+        logger.info(f"Retraining {experiment_path} repetition {i} ...")
         start_time = time.perf_counter()
         results = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
                              train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)
@@ -43,8 +43,9 @@ def main(**args):
         config.train_spec['experiment_path'] = os.path.join(experiment_path, f"retrain_{i+1}")
         
         end_time = time.perf_counter()
-        hours, mins = divmod(end_time - start_time, 3600)
-        logger.info(f"Retraining repetition {i} finished in {hours:.0f} hours and {mins:.0f} minutes.")
+        hours, rem = divmod(end_time - start_time, 3600)
+        mins, _ = divmod(rem, 60)
+        logger.info(f"Retraining {experiment_path} repetition {i} finished in {int(hours):02d}h:{int(mins):02d}m.")
 
 
     # Save results
