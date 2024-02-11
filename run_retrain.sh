@@ -24,28 +24,19 @@ run_retrain() {
         --num_repetitions 5
 }
 
-# Populate exp_paths with the folders in experiments_directory
+# Print the contents of exp_paths
+echo "Contents of exp_paths:"
 for exp_folder in "$experiments_directory"/*; do
     if [ -d "$exp_folder" ]; then
-        exp_paths+=("$exp_folder")
+        run_retrain "$exp_folder" &
+        echo "Started process for $exp_folder"
+    fi
+
+    # Limit to two processes in parallel
+    if [ $(jobs -p | wc -l) -ge 2 ]; then
+        wait -n || { echo "Waiting for background jobs..."; wait -n; }
     fi
 done
 
-# Number of concurrent processes
-max_processes=2
-current_processes=0
-
-# Iterate through exp_paths
-for exp_path in "${exp_paths[@]}"; do
-    # Wait until a slot is available
-    while [ "$current_processes" -ge "$max_processes" ]; do
-        sleep 1
-    done
-
-    # Run the retrain function in the background
-    run_retrain "$exp_path" &
-    ((current_processes++))
-done
-
-# Wait for all background jobs to finish
+# Wait for all remaining background jobs to finish
 wait
