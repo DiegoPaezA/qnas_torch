@@ -166,11 +166,16 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
     cpu_inference_time = prof.key_averages()[0].cpu_time
     cuda_inference_time = prof.key_averages()[0].cuda_time
+    total_params = sum(p.numel() for p in model.parameters())
+    total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
+    params['total_params'] = total_params
+    params['total_trainable_params'] = total_trainable_params
     params['cuda_inference_time'] = cuda_inference_time
     params['cpu_inference_time'] = cpu_inference_time
     params['model_memory_usage'] = model_memory_usage
     params['best_accuracy'] = best_accuracy
+
     
     LOGGER.info(f"Cuda Inference time: {cuda_inference_time} microseconds")
     LOGGER.info(f"Model memory usage: {model_memory_usage} MB")
