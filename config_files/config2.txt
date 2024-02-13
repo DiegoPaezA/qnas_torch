@@ -6,7 +6,7 @@ QNAS:
     max_num_nodes: 20
     num_quantum_ind: 4
     penalize_number: 3
-    repetition: 2
+    repetition: 3
     replace_method: best
     update_quantum_gen: 5
     update_quantum_rate: 0.1
@@ -39,7 +39,7 @@ train:
     epochs_to_eval: 5 
     optimizer: AdamW
     mixed_precision: True
-    available_gpus: [0, 2] # gpu0, gpu1, gpu2 [0, 1, 2]
+    available_gpus: [0, 1] # gpu0, gpu1, gpu2 [0, 1, 2]
     device: cuda:0
 
     # Dataset
