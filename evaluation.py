@@ -66,8 +66,7 @@ class EvalPopulation(object):
         self.train_params = params
         self.fn_dict = fn_dict
         self.logger = init_log(log_level, name=__name__)
-        desired_gpus = params["available_gpus"]
-        self.gpus = [f'cuda:{i}' for i in desired_gpus if i < torch.cuda.device_count()]
+        self.gpus = [torch.device(f"cuda:{i}") for i in range(torch.cuda.device_count())]
         self.loader = input.GenericDataLoader(params=self.train_params)
         #mp.set_start_method('fork')  # fork for linux, spawn for windows
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")        
