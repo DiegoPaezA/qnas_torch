@@ -415,7 +415,7 @@ class QNAS(object):
 
         self.update_quantum()
 
-        #self.save_data()
+        self.save_data()
         self.log_data()
         #self.save_train_data()
 
