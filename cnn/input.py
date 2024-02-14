@@ -125,7 +125,7 @@ class GenericDataLoader:
             Normalize(mean=mean, std=std)
         ])
       
-  def get_loader(self, for_train=True, pin_memory_device=torch.device('cuda')):
+  def get_loader(self, for_train=True, pin_memory_device="cuda"):
     """
     Get data loader for training or validation/testing.
 
