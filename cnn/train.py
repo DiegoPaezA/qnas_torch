@@ -241,7 +241,8 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
     
     # Add the fully connected layer to the model
-    inputs, _ = next(iter(train_loader))
+    input_shape =  [params['batch_size']] + dataset_info['shape']
+    inputs = torch.randn(input_shape)
     _ = model_net(inputs)
     model_net.to(device)
     
