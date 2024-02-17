@@ -42,7 +42,7 @@ class ChannelAttention(nn.Module):
         max_out = self.fc2(self.relu1(self.fc1(max_pool)))
         channel_attention = torch.sigmoid(avg_out + max_out)
 
-        return channel_attention
+        return x * channel_attention
 
 class SpatialAttention(nn.Module):
     """
@@ -72,7 +72,7 @@ class SpatialAttention(nn.Module):
         pooled_tensor = torch.cat([avg_pool, max_pool], dim=1)
         spatial_attention = self.sigmoid(self.conv(pooled_tensor))
 
-        return spatial_attention
+        return x * spatial_attention
 
 class CBAMBlock(nn.Module):
     """
@@ -101,9 +101,8 @@ class CBAMBlock(nn.Module):
             torch.Tensor: Output tensor after applying CBAM.
         """
         channel_attention = self.channel_attention(x)
-        spatial_attention = self.spatial_attention(x)
-        x = x * channel_attention * spatial_attention
-        return x
+        spatial_attention = self.spatial_attention(channel_attention)
+        return spatial_attention
 
 class SEBlock(nn.Module):
     """
