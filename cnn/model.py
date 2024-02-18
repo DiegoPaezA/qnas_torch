@@ -2,6 +2,9 @@
 * Licensed under the MIT license
 
 - CNN model
+- CBAM Reference: https://arxiv.org/abs/1807.06521
+    - Code Reference: https://tinyurl.com/25wyxnb8
+    - Code Resnet CBAM: https://tinyurl.com/2b8zkaol
 
 """
 import torch
@@ -22,9 +25,9 @@ class ChannelAttention(nn.Module):
         super(ChannelAttention, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1)
+        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1, bias=False)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1)
+        self.fc2 = nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1, bias=False)
 
     def forward(self, x):
         """
@@ -100,9 +103,10 @@ class CBAMBlock(nn.Module):
         Returns:
             torch.Tensor: Output tensor after applying CBAM.
         """
+        residual = x
         out = self.channel_attention(x) * x     # Channel attention output
         out = self.spatial_attention(out) * out # Spatial attention - cbam output
-        return out
+        return out + residual
 
 class SEBlock(nn.Module):
     """
@@ -189,8 +193,9 @@ class ConvBlock(nn.Module):
         """
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
-        
+        #print(f'ConvBlock input.shape: {inputs.shape}')
         tensor = self.conv(inputs)
+        #print(f'layer1 output.shape: {tensor.shape}')
         tensor = self.batch_norm(tensor)
         tensor = self.activation(tensor)
         
@@ -262,8 +267,13 @@ class CBAMConvBlock(nn.Module):
         Returns:
             torch.Tensor: Output tensor after applying CBAM Convolutional Block.
         """
+        # check if the channel is equal to 3 
+        
+        ##print(f'CBAMConvBlock input.shape: {x.shape}')
         x = self.conv_block(x)
+        ##print(f'layer1 output.shape: {x.shape}')
         x = self.cbam_block(x)
+        ##print(f'layer2 output.shape: {x.shape}')
         return x
 
 class DepthConvBlock(nn.Module):
@@ -412,7 +422,7 @@ class CBAMDepthConvBlock(nn.Module):
     
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
-    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
         """ Initialize ResidualV1.
 
         Args:
@@ -438,7 +448,7 @@ class ResidualV1(nn.Module):
         self.channels_last = channels_last
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
-        self.conv1 = nn.Conv2d(in_channels=in_channel, out_channels=filters, 
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
                               kernel_size=self.kernel_size,stride=strides, 
                               padding= self.padding ,bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
@@ -451,89 +461,6 @@ class ResidualV1(nn.Module):
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
         init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
-        
-
-    def forward(self, inputs):
-        """ Residual block with convolution op + batch normalization op + add op.
-
-        Args:
-            inputs: input tensor to the
-        Returns:
-            output tensor.
-        """
-        if self.channels_last:
-            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
-        
-        print(f'inputs.shape: {inputs.shape}')            
-        tensor = self.conv1(inputs)
-        tensor = self.bn1(tensor)
-        tensor = F.relu(tensor)
-        print(f'tensor.shape Layer 1: {tensor.shape}')
-            
-        tensor = self.conv2(tensor)
-        tensor = self.bn2(tensor)
-              
-        print(f'tensor.shape Layer 2: {tensor.shape}')
-        print(f'inputs.shape before pad: {inputs.shape}')
-        
-        inputs, tensor = pad_features([inputs, tensor], channels_last=False)
-        
-        print(f'inputs.shape after pad: {inputs.shape}')
-        print(f'tensor.shape Pad: {tensor.shape}')
-        
-        
-        tensor = tensor + inputs
-        
-        tensor = F.relu(tensor)
-        
-        if self.channels_last:
-            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
-
-        return tensor
-
-class ResidualV1CBAM(nn.Module):
-    """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
-    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
-        """ Initialize ResidualV1.
-
-        Args:
-            in_channel : int
-                Represents the number of channels in the input image (default 3 for RGB)
-            kernel : int
-                Represents the size of the convolutional window (3 means [3,3])
-            filters : int
-                Number of filters
-            strides : int
-                Represents the stride of the convolutional window (3 means [3,3])
-            mu : float
-                Mean for the batch normalization
-            epsilon : float
-                Epsilon for the batch normalization
-        """
-        super().__init__()
-        self.kernel_size = kernel
-        self.filters = filters
-        self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
-        self.channels_last = channels_last
-        self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
-        
-        self.conv1 = nn.Conv2d(in_channels=in_channel, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
-        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
-        self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
-        
-        init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
-        init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
-        
-        self.cbam_block = CBAMBlock(filters)
         
 
     def forward(self, inputs):
@@ -555,8 +482,7 @@ class ResidualV1CBAM(nn.Module):
             
         tensor = self.conv2(tensor)
         tensor = self.bn2(tensor)
-        
-        tensor = self.cbam_block(tensor)    # Apply CBAM block   
+              
         #print(f'tensor.shape Layer 2: {tensor.shape}')
         #print(f'inputs.shape before pad: {inputs.shape}')
         
@@ -565,9 +491,97 @@ class ResidualV1CBAM(nn.Module):
         #print(f'inputs.shape after pad: {inputs.shape}')
         #print(f'tensor.shape Pad: {tensor.shape}')
         
+        
         tensor = tensor + inputs
+        
         tensor = F.relu(tensor)
         
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+
+        return tensor
+
+class ResidualV1CBAM(nn.Module):
+    """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> CBAM -> Add -> ReLU """
+    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+        """ Initialize ResidualV1.
+
+        Args:
+            in_channel : int
+                Represents the number of channels in the input image (default 3 for RGB)
+            kernel : int
+                Represents the size of the convolutional window (3 means [3,3])
+            filters : int
+                Number of filters
+            strides : int
+                Represents the stride of the convolutional window (3 means [3,3])
+            mu : float
+                Mean for the batch normalization
+            epsilon : float
+                Epsilon for the batch normalization
+        """
+        super().__init__()
+        self.kernel_size = kernel
+        self.filters = filters
+        self.strides = strides
+        self.batch_norm_mu = mu
+        self.batch_norm_epsilon = epsilon
+        self.channels_last = channels_last
+        self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
+        
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
+                              kernel_size=self.kernel_size,stride=strides, 
+                              padding= self.padding ,bias=False)
+        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
+                                         eps=self.batch_norm_epsilon)
+        self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
+                              kernel_size=self.kernel_size,stride=strides, 
+                              padding= self.padding ,bias=False)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
+                                         eps=self.batch_norm_epsilon)
+        
+        init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        
+        self.channel_attention = ChannelAttention(filters)
+        self.spatial_attention = SpatialAttention()
+                # Shortcut connection
+        if strides != 1 or in_channels != filters:
+            #print("Shortcut connection")
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, filters, kernel_size=1, padding=0,stride=strides, bias=False),
+                nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
+                                         eps=self.batch_norm_epsilon)
+            )
+        else:
+            self.shortcut = nn.Identity()
+        
+
+    def forward(self, inputs):
+        """ Residual block with convolution op + batch normalization op + add op.
+
+        Args:
+            inputs: input tensor to the
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        tensor = self.conv1(inputs)
+        tensor = self.bn1(tensor)
+        tensor = F.relu(tensor)
+            
+        tensor = self.conv2(tensor)
+        tensor = self.bn2(tensor)
+        
+        # Apply CBAM
+        tensor = self.channel_attention(tensor) * tensor
+        tensor = self.spatial_attention(tensor) * tensor
+
+        
+        tensor = tensor + self.shortcut(inputs)
+        tensor = F.relu(tensor)
         if self.channels_last:
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
 
@@ -616,7 +630,7 @@ class ResidualV1Pr(nn.Module):
         
         # Shortcut connection
         if strides != 1 or in_channel != filters:
-            print("Shortcut connection")
+            #print("Shortcut connection")
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channel, filters, kernel_size=1, padding=0,stride=strides, bias=False),
                 nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
@@ -637,20 +651,20 @@ class ResidualV1Pr(nn.Module):
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
         
-        print(f'inputs.shape: {inputs.shape}')            
+        #print(f'inputs.shape: {inputs.shape}')            
         tensor = self.conv1(inputs)
         tensor = self.bn1(tensor)
         tensor = F.relu(tensor)
-        print(f'tensor.shape Layer 1: {tensor.shape}')
+        #print(f'tensor.shape Layer 1: {tensor.shape}')
             
         tensor = self.conv2(tensor)
         tensor = self.bn2(tensor)
               
-        print(f'tensor.shape Layer 2: {tensor.shape}')
+        #print(f'tensor.shape Layer 2: {tensor.shape}')
               
         tensor = tensor + self.shortcut(inputs)
         tensor = F.relu(tensor)
-        print(f'output.shape: {tensor.shape}')
+        #print(f'output.shape: {tensor.shape}')
         if self.channels_last:
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
 
@@ -694,7 +708,7 @@ class MaxPooling(nn.Module):
         if inputs.shape[2] >= self.kernel and inputs.shape[3] >= self.kernel:
             tensor = self.max_pool(inputs)
         else:
-            #print("Warning: MaxPooling layer not applied because the image size is smaller than the kernel size")
+            ##print("Warning: MaxPooling layer not applied because the image size is smaller than the kernel size")
             return inputs
         
         if self.channels_last:
@@ -733,7 +747,7 @@ class AvgPooling(nn.Module):
         Returns:
             output tensor.
         """
-        #print(f'inputs.shape avg: {inputs.shape}')
+        ##print(f'inputs.shape avg: {inputs.shape}')
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
         
