@@ -16,6 +16,7 @@ from sklearn.metrics import confusion_matrix
 from cnn import model, input
 from util import create_info_file, init_log
 from torch.profiler import profile, record_function, ProfilerActivity
+from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
 log_directory = os.path.join(current_directory, 'logs')
@@ -53,6 +54,21 @@ def compute_confusion_matrix(model, data_loader, device):
 
     conf_matrix = confusion_matrix(all_labels, all_predictions)
     return conf_matrix
+
+def reset_and_load_best_model(params, best_model_path, device):
+    # Reinitialize the original model
+    
+    best_model = model.NetworkGraph(num_classes=params["num_classes"], mu=0.99)
+    filtered_dict = {key: item for key, item in params['fn_dict'].items() if key in params['net_list']}
+    best_model.create_functions(fn_dict=filtered_dict, net_list=params['net_list'])
+
+    input_random = torch.randn(params['input_shape'])
+    _ = best_model(input_random)
+    # Load the state dictionary of the best model into the new model
+    best_model.load_state_dict(torch.load(best_model_path))
+    best_model.to(device)
+
+    return best_model
 
 def train_epoch(model, criterion, optimizer, data_loader, device):
     model.train()
@@ -146,7 +162,15 @@ def train(model: torch.nn.Module,
     max_epochs = params['max_epochs']
 
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
-
+    
+    if params['lr_scheduler'] == 'exponential':
+        lr_scheduler = ExponentialLR(optimizer, gamma=0.9)
+    elif params['lr_scheduler'] == 'reduce_on_plateau':
+        lr_scheduler = ReduceLROnPlateau(optimizer, patience=5, factor=0.1)
+    elif params['lr_scheduler'] == 'cosine':
+        lr_scheduler = CosineAnnealingLR(optimizer, T_max=max_epochs, eta_min=0, last_epoch=-1)
+    else:
+        lr_scheduler = None
     #for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
     for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
@@ -166,7 +190,14 @@ def train(model: torch.nn.Module,
             LOGGER.info(f"Experiment: {params['experiment_path']} - Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss:.2f} - Validation loss: {validation_loss:.2f} - Validation accuracy: {accuracy:.2f}%")
             #print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
-    test_loss, test_accuracy, confusion_matrix = evaluate(model, criterion, test_loader, device, test=True)
+        if lr_scheduler is not None:
+            if params['lr_scheduler'] == 'reduce_on_plateau':
+                lr_scheduler.step(accuracy)                
+            else:
+                lr_scheduler.step()
+        
+    best_model_loaded = reset_and_load_best_model(params, best_model_path, device)
+    test_loss, test_accuracy, confusion_matrix = evaluate(best_model_loaded, criterion, test_loader, device, test=True)
     
     LOGGER.info(f"Experiment: {params['experiment_path']} - Test loss: {test_loss:.2f} - Test accuracy: {test_accuracy:.2f}%")
     #print(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
@@ -216,7 +247,6 @@ def train_and_eval(params: Dict[str, Any],
     """
     
     device = params['device']
-    params['net_list'] = net_list
     model_path = os.path.join(params['experiment_path'])
     if not os.path.exists(model_path):
         os.makedirs(model_path)
@@ -233,14 +263,18 @@ def train_and_eval(params: Dict[str, Any],
 
     params['model_net'] = model_net
     params['net_list'] = net_list
+    params['fn_dict'] = fn_dict
     params['num_classes'] = dataset_info["num_classes"]
 
     device = params['device']
     
     # Add the fully connected layer to the model
-    inputs, _ = next(iter(train_loader))
+    input_shape =  [params['batch_size']] + dataset_info['shape']
+    inputs = torch.randn(input_shape)
     _ = model_net(inputs)
     model_net.to(device)
+    
+    params['input_shape'] = input_shape
     
     criterion = nn.CrossEntropyLoss()
     
