@@ -174,15 +174,16 @@ def check_files(exp_path):
         raise OSError('User must provide a valid \"--experiment_path\" to continue '
                       'evolution or to retrain a model.')
     best_experiment_folders = [f.path for f in os.scandir(exp_path) if f.is_dir()]
-    
-    file_path = os.path.join(best_experiment_folders[0], 'training_params.txt')
+    # identify the index of the folder that begins with a number
+    index = [i for i, s in enumerate(best_experiment_folders) if s.split('/')[1][0].isdigit()]
+    file_path = os.path.join(best_experiment_folders[index[0]], 'training_params.txt')
 
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:
             raise OSError('User must provide an \"--experiment_path\" with a valid data file to '
                           'continue evolution or to retrain a model.')
     else:
-        raise OSError('log_file not found!')
+        raise OSError('training_params.txt not found!')
 
     file_path = os.path.join(exp_path, 'log_params_evolution.txt')
 

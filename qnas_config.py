@@ -335,7 +335,8 @@ class ConfigParameters(object):
         """
 
         best_experiment_folders = [f.path for f in os.scandir(experiment_path) if f.is_dir()]
-        with open(os.path.join(best_experiment_folders[0], 'training_params.txt'), 'r') as file:
+        index = [i for i, s in enumerate(best_experiment_folders) if s.split('/')[1][0].isdigit()]
+        with open(os.path.join(best_experiment_folders[index[0]], 'training_params.txt'), 'r') as file:
                 best_individual_info = yaml.safe_load(file)
         net_list = best_individual_info.get('net_list', [])
         generation = best_individual_info.get('generation', 0)
