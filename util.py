@@ -3,6 +3,7 @@ import yaml
 import pickle as pkl
 import os
 import re
+import json
 import matplotlib.pyplot as plt
 from shutil import rmtree
 
@@ -66,8 +67,9 @@ def save_results_file(out_path, results_list, file_name='retrain_results.txt'):
     """
 
     with open(os.path.join(out_path, file_name), 'w') as f:
-        for item in results_list:
-            f.write("%s\n" % item)
+        for data in results_list:
+            json.dump(data, f, indent=4)
+            f.write('\n')
 
 def check_file_exists(file_path):
     """ Check if a file exists.
