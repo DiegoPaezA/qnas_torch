@@ -173,10 +173,11 @@ def check_files(exp_path):
     if not os.path.exists(exp_path):
         raise OSError('User must provide a valid \"--experiment_path\" to continue '
                       'evolution or to retrain a model.')
-    best_experiment_folders = [f.path for f in os.scandir(exp_path) if f.is_dir()]
+    experiment_folders = [f.name for f in os.scandir(exp_path) if f.is_dir()]
+    best_result_folder = [name for name in experiment_folders if name[0].isdigit()]
+    best_result_folder = os.path.join(exp_path, best_result_folder[0])
     # identify the index of the folder that begins with a number
-    index = [i for i, s in enumerate(best_experiment_folders) if s.split('/')[1][0].isdigit()]
-    file_path = os.path.join(best_experiment_folders[index[0]], 'training_params.txt')
+    file_path = os.path.join(best_result_folder, 'training_params.txt')
 
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:

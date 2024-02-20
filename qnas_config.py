@@ -334,16 +334,17 @@ class ConfigParameters(object):
         Note: This method assumes a specific folder and file structure for evolved data.
         """
 
-        best_experiment_folders = [f.path for f in os.scandir(experiment_path) if f.is_dir()]
-        index = [i for i, s in enumerate(best_experiment_folders) if s.split('/')[1][0].isdigit()]
-        with open(os.path.join(best_experiment_folders[index[0]], 'training_params.txt'), 'r') as file:
+        experiment_folders = [f.name for f in os.scandir(experiment_path) if f.is_dir()]
+        best_result_folder = [name for name in experiment_folders if name[0].isdigit()]
+        best_result_folder = os.path.join(experiment_path, best_result_folder[0])
+        with open(os.path.join(best_result_folder, 'training_params.txt'), 'r') as file:
                 best_individual_info = yaml.safe_load(file)
         net_list = best_individual_info.get('net_list', [])
         generation = best_individual_info.get('generation', 0)
         individual = best_individual_info.get('individual', 0)
         
         if generation == 0 and individual == 0: # only for old format
-                matches = re.search(r'(\d+)_(\d+)$', best_experiment_folders[0])
+                matches = re.search(r'(\d+)_(\d+)$', best_result_folder)
                 generation = int(matches.group(1))
                 individual = int(matches.group(2))
 
