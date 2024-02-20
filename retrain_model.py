@@ -32,25 +32,43 @@ def main(**args):
     test_loader = data_loader.get_loader(for_train=False, pin_memory_device=args['device'])
     
     retrain_multi = []
-
+    dict_results = {}
     # Retrain model for the number of repetitions
     for i in range(1, args['num_repetitions']+1):
         logger.info(f"Retraining {experiment_path} repetition {i} ...")
         start_time = time.perf_counter()
         results = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
                              train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)
-        retrain_multi.append(results)
+        
+        dict_results["experiment_id"] = f"retrain_{i+1}"
+        dict_results["training_losses"] = results['training_losses']
+        dict_results["training_accuracies"] = results['training_accuracies']
+        dict_results["validation_losses"] = results['validation_losses']
+        dict_results["validation_accuracies"] = results['validation_accuracies']
+        dict_results["test_loss"] = results['test_loss']
+        dict_results["test_accuracy"] = results['test_accuracy']
+        dict_results["best_accuracy"] = results['best_accuracy']
+        dict_results["confusion_matrix"] = results['confusion_matrix'].tolist()
+        
         config.train_spec['experiment_path'] = os.path.join(experiment_path, f"retrain_{i+1}")
         
         end_time = time.perf_counter()
         hours, rem = divmod(end_time - start_time, 3600)
         mins, _ = divmod(rem, 60)
         logger.info(f"Retraining {experiment_path} repetition {i} finished in {int(hours):02d}h:{int(mins):02d}m.")
+        
+        dict_results["time"] = f"{int(hours):02d}h:{int(mins):02d}m"
+        retrain_multi.append(dict_results)
+        dict_results = {}
 
 
     # Save results
     logger.info(f"Saving results ...")
-    save_results_file(out_path=experiment_path, results_list=retrain_multi, file_name='retrain_results.txt')
+    if config.train_spec['lr_scheduler'] is not None:
+        file_name = f"retrain_results_{config.train_spec['lr_scheduler']}.txt"
+        save_results_file(out_path=experiment_path, results_list=retrain_multi, file_name=file_name)
+    else:
+        save_results_file(out_path=experiment_path, results_list=retrain_multi, file_name='retrain_results.txt')
 
     logger.info(f"Retraining finished.")
 
