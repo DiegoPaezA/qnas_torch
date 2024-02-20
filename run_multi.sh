@@ -25,14 +25,14 @@
 #         --log_level INFO
 # done
 
-echo "Running evolution experiment with config13.txt"
+echo "Running evolution experiment with config14.txt"
 
-for ((i=1; i<=5; i++)); do
-    exp_path="exp15_adamw_repeat_$i"
+for ((i=1; i<=2; i++)); do
+    exp_path="exp16_adamw_repeat_$i"
     
-    CUDA_VISIBLE_DEVICES='0,1' python run_evolution.py \
+    CUDA_VISIBLE_DEVICES=1 python run_evolution.py \
         --experiment_path "$exp_path" \
-        --config_file 'config_files/config13.txt' \
+        --config_file 'config_files/config14.txt' \
         --data_path cifar10_data \
         --log_level INFO
 done
