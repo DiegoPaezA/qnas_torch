@@ -28,8 +28,8 @@ class ChannelAttention(nn.Module):
         self.fc1 = nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1, bias=False)
         self.relu1 = nn.ReLU()
         self.fc2 = nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1, bias=False)
-        init.kaiming_normal_(self.fc1.weight)
-        init.kaiming_normal_(self.fc2.weight)
+        init.kaiming_normal_(self.fc1.weight,nonlinearity='relu')
+        init.kaiming_normal_(self.fc2.weight,nonlinearity='relu')
 
     def forward(self, x):
         """
@@ -61,7 +61,7 @@ class SpatialAttention(nn.Module):
         super(SpatialAttention, self).__init__()
         self.conv = nn.Conv2d(2, 1, kernel_size=kernel_size, padding=kernel_size // 2)
         self.sigmoid = nn.Sigmoid()
-        init.kaiming_normal_(self.conv.weight)
+        init.kaiming_normal_(self.conv.weight,nonlinearity='relu')
 
     def forward(self, x):
         """
@@ -131,8 +131,8 @@ class SEBlock(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Conv2d(in_channels, in_channels // reduction_ratio, kernel_size=1)
         self.fc2 = nn.Conv2d(in_channels // reduction_ratio, in_channels, kernel_size=1)
-        init.kaiming_normal_(self.fc1.weight)
-        init.kaiming_normal_(self.fc2.weight)
+        init.kaiming_normal_(self.fc1.weight,nonlinearity='relu')
+        init.kaiming_normal_(self.fc2.weight,nonlinearity='relu')
 
     def forward(self, x):
         """
@@ -182,7 +182,7 @@ class ConvBlock(nn.Module):
                             kernel_size=self.kernel_size, 
                             stride=self.strides, 
                             padding= self.padding)
-        init.kaiming_normal_(self.conv.weight)
+        init.kaiming_normal_(self.conv.weight,nonlinearity='relu')
         self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
                                          momentum=self.batch_norm_mu, 
                                          eps=self.batch_norm_epsilon)
@@ -316,8 +316,8 @@ class DepthConvBlock(nn.Module):
                                         stride=self.strides, padding=self.padding, groups=in_channels)
         self.pointwise_conv = nn.Conv2d(in_channels=in_channels,out_channels= self.filters, kernel_size=1)
 
-        init.kaiming_normal_(self.depthwise_conv.weight)
-        init.kaiming_normal_(self.pointwise_conv.weight)
+        init.kaiming_normal_(self.depthwise_conv.weight,nonlinearity='relu')
+        init.kaiming_normal_(self.pointwise_conv.weight,nonlinearity='relu')
 
         self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
                                          momentum=self.batch_norm_mu, 
@@ -545,8 +545,8 @@ class ResidualV1CBAM(nn.Module):
         self.bn2 = nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
                                          eps=self.batch_norm_epsilon)
         
-        init.kaiming_normal_(self.conv1.weight)  # He Normal initialization
-        init.kaiming_normal_(self.conv2.weight)  # He Normal initialization
+        init.kaiming_normal_(self.conv1.weight,nonlinearity='relu')  # He Normal initialization
+        init.kaiming_normal_(self.conv2.weight,nonlinearity='relu')  # He Normal initialization
         
         self.channel_attention = ChannelAttention(filters)
         self.spatial_attention = SpatialAttention()
