@@ -28,16 +28,16 @@ QNAS:
                      'conv_5_1_32':  {'function': 'ConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
                      'conv_5_1_64':  {'function': 'ConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
                      'conv_5_1_128':  {'function': 'ConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_1_1_32':  {'function': 'CBAMConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_1_1_64':  {'function': 'CBAMConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_1_1_128':  {'function': 'CBAMConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_3_1_32':  {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_3_1_64':  {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_3_1_128': {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_3_1_256': {'function': 'CBAMConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_5_1_32':  {'function': 'CBAMConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_5_1_64':  {'function': 'CBAMConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
-                     'cbamconv_5_1_128':  {'function': 'CBAMConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_1_1_32':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_1_1_64':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_1_1_128': {'function': 'ResidualV1CBAM', 'params': {'kernel': 1, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_3_1_32':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_3_1_64':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_3_1_128': {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_3_1_256': {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_5_1_32':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 5, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_5_1_64':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 5, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/20.0},
+                     'resv1cbam_5_1_128': {'function': 'ResidualV1CBAM', 'params': {'kernel': 5, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/20.0},
                      'max_pool_2_2': {'function': 'MaxPooling', 'params': {'kernel': 2, 'strides': 2}, 'prob': 1.0/3.0/2.0},
                      'avg_pool_2_2': {'function': 'AvgPooling', 'params': {'kernel': 2, 'strides': 2}, 'prob': 1.0/3.0/2.0},
                      'no_op':        {'function': 'NoOp', 'params': {}, 'prob': 1.0/3.0}}
@@ -49,7 +49,7 @@ train:
     epochs_to_eval: 5 
     optimizer: AdamW
     mixed_precision: True
-    available_gpus: [0, 2] # gpu0, gpu1, gpu2 [0, 1, 2]
+    available_gpus: [0, 1] # gpu0, gpu1, gpu2 [0, 1, 2]
     device: cuda:0
 
     # Dataset
