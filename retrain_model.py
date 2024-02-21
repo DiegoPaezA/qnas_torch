@@ -31,7 +31,7 @@ def main(**args):
     train_loader, val_loader = data_loader.get_loader(pin_memory_device=args['device'])
     test_loader = data_loader.get_loader(for_train=False, pin_memory_device=args['device'])
     
-    retrain_multi = []
+    output_dict = {}
     dict_results = {}
     # Retrain model for the number of repetitions
     for i in range(1, args['num_repetitions']+1):
@@ -40,7 +40,6 @@ def main(**args):
         results = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
                              train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)
         
-        dict_results["experiment_id"] = f"retrain_{i+1}"
         dict_results["training_losses"] = results['training_losses']
         dict_results["training_accuracies"] = results['training_accuracies']
         dict_results["validation_losses"] = results['validation_losses']
@@ -58,7 +57,7 @@ def main(**args):
         logger.info(f"Retraining {experiment_path} repetition {i} finished in {int(hours):02d}h:{int(mins):02d}m.")
         
         dict_results["time"] = f"{int(hours):02d}h:{int(mins):02d}m"
-        retrain_multi.append(dict_results)
+        output_dict[f"{config.train_spec['lr_scheduler']}_retrain_{i}"] = dict_results
         dict_results = {}
 
 
@@ -66,9 +65,9 @@ def main(**args):
     logger.info(f"Saving results ...")
     if config.train_spec['lr_scheduler'] is not None:
         file_name = f"retrain_results_{config.train_spec['lr_scheduler']}.txt"
-        save_results_file(out_path=experiment_path, results_list=retrain_multi, file_name=file_name)
+        save_results_file(out_path=experiment_path, results_dict=output_dict, file_name=file_name)
     else:
-        save_results_file(out_path=experiment_path, results_list=retrain_multi, file_name='retrain_results.txt')
+        save_results_file(out_path=experiment_path, results_dict=output_dict, file_name='retrain_results.txt')
 
     logger.info(f"Retraining finished.")
 
