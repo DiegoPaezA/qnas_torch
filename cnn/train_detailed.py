@@ -213,7 +213,7 @@ def train(model: torch.nn.Module,
     training_results['best_accuracy'] = best_accuracy
     training_results['test_loss'] = test_loss
     training_results['test_accuracy'] = test_accuracy
-    training_results['confusion_matrix'] = confusion_matrix
+    training_results['confusion_matrix'] = confusion_matrix.tolist()
             
     return training_results
 

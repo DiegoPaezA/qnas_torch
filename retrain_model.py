@@ -32,34 +32,21 @@ def main(**args):
     test_loader = data_loader.get_loader(for_train=False, pin_memory_device=args['device'])
     
     output_dict = {}
-    dict_results = {}
     # Retrain model for the number of repetitions
     for i in range(1, args['num_repetitions']+1):
         logger.info(f"Retraining {experiment_path} repetition {i} ...")
         start_time = time.perf_counter()
-        results = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
-                             train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)
-        
-        dict_results["training_losses"] = results['training_losses']
-        dict_results["training_accuracies"] = results['training_accuracies']
-        dict_results["validation_losses"] = results['validation_losses']
-        dict_results["validation_accuracies"] = results['validation_accuracies']
-        dict_results["test_loss"] = results['test_loss']
-        dict_results["test_accuracy"] = results['test_accuracy']
-        dict_results["best_accuracy"] = results['best_accuracy']
-        dict_results["confusion_matrix"] = results['confusion_matrix'].tolist()
-        
-        config.train_spec['experiment_path'] = os.path.join(experiment_path, f"retrain_{i+1}")
+        results_dict = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
+                             train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)    
+        config.train_spec['experiment_path'] = os.path.join(experiment_path, f"{config.train_spec['lr_scheduler']}_retrain_{i+1}")
         
         end_time = time.perf_counter()
         hours, rem = divmod(end_time - start_time, 3600)
         mins, _ = divmod(rem, 60)
         logger.info(f"Retraining {experiment_path} repetition {i} finished in {int(hours):02d}h:{int(mins):02d}m.")
         
-        dict_results["time"] = f"{int(hours):02d}h:{int(mins):02d}m"
-        output_dict[f"{config.train_spec['lr_scheduler']}_retrain_{i}"] = dict_results
-        dict_results = {}
-
+        results_dict["time"] = f"{int(hours):02d}h:{int(mins):02d}m"
+        output_dict[f"{config.train_spec['lr_scheduler']}_retrain_{i}"] = results_dict
 
     # Save results
     logger.info(f"Saving results ...")
