@@ -58,18 +58,16 @@ def create_info_file(out_path, info_dict, file_name='data_info.txt'):
     with open(os.path.join(out_path, file_name), 'w') as f:
         yaml.dump(info_dict, f)
 
-def save_results_file(out_path, results_list, file_name='retrain_results.txt'):
+def save_results_file(out_path, results_dict, file_name='retrain_results.txt'):
     """ Saves results in *results_dict* in a txt file.
 
     Args:
         out_path: (str) path to the directory where to save results file.
-        results_list: list of dicts with each repetition results.
+        results_dict: dict with all relevant results the user wants to save in the results file.
     """
 
     with open(os.path.join(out_path, file_name), 'w') as f:
-        for data in results_list:
-            json.dump(data, f, indent=4)
-            f.write('\n')
+        json.dump(results_dict, f, indent=4)
 
 def check_file_exists(file_path):
     """ Check if a file exists.
