@@ -11,8 +11,10 @@ import os
 from time import time
 import torchvision.datasets
 from torch.utils.data import DataLoader, Subset, Dataset
-from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, Normalize, TrivialAugmentWide, ToPILImage
+from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, Normalize, TrivialAugmentWide
 from sklearn.model_selection import StratifiedShuffleSplit
+import medmnist
+from medmnist import INFO
 
 cifar10_info = {
   'dataset': 'CIFAR10',
@@ -76,6 +78,10 @@ class GenericDataLoader:
     self.info_dict['seed'] = seed
     self.download_status = not os.path.exists(self.params['data_path'])
     
+    
+    if self.download_status:
+      os.makedirs(self.params['data_path'])
+
     if info is None:
         # Check if the dataset is available in the available_datasets dict
         if self.params['dataset'].lower() in available_datasets.keys():
@@ -87,22 +93,53 @@ class GenericDataLoader:
           
         # check if the dataset is in the torchvision datasets and compute the parameters
         elif hasattr(torchvision.datasets, self.params['dataset'].upper()):
-          dataset_class = getattr(torchvision.datasets, self.params['dataset'].upper())
-          dataset_ = dataset_class(self.params['data_path'], download=True, transform=ToTensor())
-          loader = DataLoader(dataset_, batch_size=len(dataset_), num_workers=0, shuffle=False)
-          data = next(iter(loader))
-          mean = data[0].mean(dim=(0, 2, 3)).tolist()
-          std = data[0].std(dim=(0, 2, 3)).tolist()
-          channels, height, width = dataset_[0][0].shape
-          self.num_classes = len(dataset_.classes)
+          
+          if util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
+            info_dataset = util.load_yaml(os.path.join(self.params['data_path'], 'data_info.txt'))
+            mean = info_dataset['mean']
+            std = info_dataset['std']
+            channels, height, width = info_dataset['shape']
+            self.num_classes = info_dataset['num_classes']
+          else:
+            dataset_class = getattr(torchvision.datasets, self.params['dataset'].upper())
+            dataset_ = dataset_class(self.params['data_path'], download=self.download_status, transform=ToTensor())
+            loader = DataLoader(dataset_, batch_size=len(dataset_), num_workers=0, shuffle=False)
+            data = next(iter(loader))
+            mean = data[0].mean(dim=(0, 2, 3)).tolist()
+            std = data[0].std(dim=(0, 2, 3)).tolist()
+            channels, height, width = dataset_[0][0].shape
+            self.num_classes = len(dataset_.classes)
+          
+        elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+          general_info = INFO[self.params['dataset'].lower()]
+          if util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
+            info_dataset = util.load_yaml(os.path.join(self.params['data_path'], 'data_info.txt'))
+            mean = info_dataset['mean']
+            std = info_dataset['std']
+            channels, height, width = info_dataset['shape']
+            self.num_classes = info_dataset['num_classes']
+          else:
+            dataset_class = getattr(medmnist, general_info['python_class'])
+            dataset_ = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=ToTensor())
+            loader = DataLoader(dataset_, batch_size=len(dataset_), num_workers=0, shuffle=False)
+            data = next(iter(loader))
+            mean = data[0].mean(dim=(0, 2, 3)).tolist()
+            std = data[0].std(dim=(0, 2, 3)).tolist()
+            channels, height, width = dataset_[0][0].shape
+            self.num_classes = len(general_info['label'])
         else:
           raise ValueError(f"Dataset class {self.params['dataset']} not found in torchvision.datasets or available_datasets.")
+        
     else:
       raise NotImplementedError('Custom dataset is not implemented yet.')             
     
     self.info_dict['shape'] = [channels, height, width]  
     self.info_dict['mean'] = mean
     self.info_dict['std'] = std
+    self.info_dict['num_classes'] = self.num_classes
+    
+    if not util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
+      util.create_info_file(out_path=self.params['data_path'], info_dict=self.info_dict)
     
     # Transformations
     self.transform = Compose([
@@ -141,6 +178,13 @@ class GenericDataLoader:
       full_dataset = dataset_class(self.params['data_path'], train=True, download=self.download_status)
       test_dataset = dataset_class(self.params['data_path'], train=False, download=self.download_status,transform=self.transform)
       self.download_status = not os.path.exists(self.params['data_path'])
+      
+    elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+      dataset_class = getattr(medmnist, INFO[self.params['dataset'].lower()]['python_class'])
+      train_dataset = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=self.train_transform)
+      valid_dataset = dataset_class(root=self.params['data_path'], split='val', download=self.download_status, transform=self.transform)
+      test_dataset = dataset_class(root=self.params['data_path'], split='test', download=self.download_status, transform=self.transform)
+      self.download_status = not os.path.exists(self.params['data_path'])
     else:
       raise NotImplementedError('Custom dataset is not implemented yet.')
         
@@ -154,43 +198,78 @@ class GenericDataLoader:
         pin_memory_device=pin_memory_device)
       return test_loader
     
-    val_split = 1 - self.train_split
-    # Get the labels and create StratifiedShuffleSplit
-    labels = full_dataset.targets
-    stratified_split = StratifiedShuffleSplit(n_splits=1, test_size=val_split)
+    if hasattr(torchvision.datasets, self.params['dataset'].upper()):
+      val_split = 1 - self.train_split
+      # Get the labels and create StratifiedShuffleSplit
+      labels = full_dataset.targets
+      stratified_split = StratifiedShuffleSplit(n_splits=1, test_size=val_split)
 
-    # Get the training and validation indices
-    train_idx, val_idx = next(stratified_split.split(labels, labels))
-    
-    num_train = len(full_dataset)
-    
-    # split the dataset into train and validation
-    if self.params['limit_data'] and self.params['limit_data_value'] < num_train:
+      # Get the training and validation indices
+      train_idx, val_idx = next(stratified_split.split(labels, labels))
+      
+      num_train = len(full_dataset)
+      
+      # split the dataset into train and validation
+      if self.params['limit_data'] and self.params['limit_data_value'] < num_train:
+        train_samples = (int(self.train_split * self.params['limit_data_value'])) 
+        val_samples = (int(self.params['limit_data_value'] - train_samples))
+        
+        train_count_per_class = train_samples // self.num_classes
+        val_count_per_class = val_samples // self.num_classes
+        
+        train_indices = []
+        val_indices = []
+        for label in set(labels):
+          label_indices = [i for i in train_idx if labels[i] == label]
+          train_indices.extend(label_indices[:train_count_per_class])
+
+          label_indices = [i for i in val_idx if labels[i] == label]
+          val_indices.extend(label_indices[:val_count_per_class])
+        
+        train_subset = Subset(full_dataset, train_indices)
+        valid_subset = Subset(full_dataset, val_indices)
+
+      else:
+        train_subset = Subset(full_dataset, train_idx)
+        valid_subset = Subset(full_dataset, val_idx)
+      
+      # Apply transformations to the datasets
+      train_dataset = MyDataset(train_subset, transform=self.train_transform)
+      valid_dataset = MyDataset(valid_subset, transform=self.transform)
+      
+    elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+      
+      num_train = len(train_dataset)
+      num_val = len(valid_dataset)
+      train_labels = [tuple(label) for label in train_dataset.labels]
+      val_labels = [tuple(label) for label in valid_dataset.labels]
+      
       train_samples = (int(self.train_split * self.params['limit_data_value'])) 
       val_samples = (int(self.params['limit_data_value'] - train_samples))
       
-      train_count_per_class = train_samples // self.num_classes
-      val_count_per_class = val_samples // self.num_classes
-      
-      train_indices = []
-      val_indices = []
-      for label in set(labels):
-        label_indices = [i for i in train_idx if labels[i] == label]
-        train_indices.extend(label_indices[:train_count_per_class])
+      # split the dataset into train and validation
+      if self.params['limit_data'] and train_samples < num_train and val_samples < num_val:
+        
+        train_count_per_class = train_samples // self.num_classes
+        val_count_per_class = val_samples // self.num_classes
+        train_indices = []
+        val_indices = []
 
-        label_indices = [i for i in val_idx if labels[i] == label]
-        val_indices.extend(label_indices[:val_count_per_class])
+        # Iterate through each class and pick 1000 samples
+        for label in set(train_labels):
+            label_indices = [i for i, l in enumerate(train_labels) if l == label]
+            train_indices.extend(label_indices[:train_count_per_class])
+
+        for label in set(val_labels):
+            label_indices = [i for i, l in enumerate(val_labels) if l == label]
+            val_indices.extend(label_indices[:val_count_per_class])
       
-      train_subset = Subset(full_dataset, train_indices)
-      valid_subset = Subset(full_dataset, val_indices)
+        train_dataset = Subset(train_dataset, train_indices)
+        valid_dataset = Subset(valid_dataset, val_indices)
 
     else:
-      train_subset = Subset(full_dataset, train_idx)
-      valid_subset = Subset(full_dataset, val_idx)
+      raise NotImplementedError('Custom dataset is not implemented yet.')
     
-    # Apply transformations to the datasets
-    train_dataset = MyDataset(train_subset, transform=self.train_transform)
-    valid_dataset = MyDataset(valid_subset, transform=self.transform)
     
     train_loader = DataLoader(
       train_dataset,
