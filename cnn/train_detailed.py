@@ -14,9 +14,9 @@ from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
 from sklearn.metrics import confusion_matrix
 from cnn import model, input
-from util import create_info_file, init_log
+from util import create_info_file, init_log, load_yaml
 from torch.profiler import profile, record_function, ProfilerActivity
-from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, StepLR
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
 log_directory = os.path.join(current_directory, 'logs')
@@ -169,6 +169,8 @@ def train(model: torch.nn.Module,
         lr_scheduler = ReduceLROnPlateau(optimizer, patience=5, factor=0.1)
     elif params['lr_scheduler'] == 'cosine':
         lr_scheduler = CosineAnnealingLR(optimizer, T_max=max_epochs, eta_min=0, last_epoch=-1)
+    elif params['lr_scheduler'] == 'step':
+        lr_scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
     else:
         lr_scheduler = None
     #for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
@@ -254,14 +256,18 @@ def train_and_eval(params: Dict[str, Any],
     
     LOGGER.info(f"Start retraining of the experiment: {params['experiment_path']}")
     # Load data information
-    dataset_info = input.available_datasets[params['dataset'].lower()]
+        # Load data info
+    if hasattr(input.available_datasets, params['dataset'].lower()):
+        dataset_info = input.available_datasets[params['dataset'].lower()]
+    else:
+        dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
     
 
     model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
-    params['model_net'] = model_net
+    #params['model_net'] = model_net
     params['net_list'] = net_list
     params['fn_dict'] = fn_dict
     params['num_classes'] = dataset_info["num_classes"]

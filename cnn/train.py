@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, List, Union, Any
 from cnn import model, input
-from util import create_info_file, init_log
+from util import create_info_file, init_log, load_yaml
 from torch.cuda.amp import GradScaler
 from torch.profiler import profile, record_function, ProfilerActivity
 
@@ -44,6 +44,7 @@ def train_epoch(model, criterion, optimizer, data_loader, device, scaler, enable
     total = 0
     amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
     for inputs, labels in data_loader:
+        labels = labels.squeeze().long()
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
         
@@ -71,6 +72,7 @@ def evaluate(model, criterion, data_loader, device, enabled_mixed_precision):
 
     with torch.no_grad():
         for inputs, labels in data_loader:
+            labels = labels.squeeze().long()
             inputs, labels = inputs.to(device), labels.to(device)
             with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=enabled_mixed_precision):
                 y_logits = model(inputs)
@@ -233,7 +235,11 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     LOGGER.info(f"Training model {id_num} on device {device} ...")
     
     # Load data info
-    dataset_info = input.available_datasets[params['dataset'].lower()]
+    if hasattr(input.available_datasets, params['dataset'].lower()):
+        dataset_info = input.available_datasets[params['dataset'].lower()]
+    else:
+        dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
+        
     
     # Create the model
     model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)    
