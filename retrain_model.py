@@ -86,7 +86,7 @@ if __name__ == '__main__':
                         help='Device to be used during training. Default = cuda.')
     parser.add_argument('--num_repetitions', type=int, default=1,
                         help='Number of times the training will be repeated. Default = 1.')
-    parser.add_argument('--lr_scheduler', type=str, default=None,choices=['cosine', 'reduce_on_plateau', 'exponential', 'None'],
+    parser.add_argument('--lr_scheduler', type=str, default=None,choices=['cosine', 'reduce_on_plateau', 'exponential','step', 'None'],
                         help='Learning rate scheduler. Default = None.')
     arguments = parser.parse_args()
 
