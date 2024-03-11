@@ -8,6 +8,7 @@ import torch
 import random
 import util
 import os
+import numpy as np
 from time import time
 import torchvision.datasets
 from torch.utils.data import DataLoader, Subset, Dataset
@@ -21,7 +22,9 @@ cifar10_info = {
   'mean': [0.491400808095932, 0.48215898871421814, 0.44653093814849854],
   'std': [0.24703224003314972, 0.24348513782024384, 0.26158785820007324],
   'shape': [3, 32, 32], 
-  'num_classes': 10
+  'num_classes': 10,
+  'task': 'classification',
+  'balanced_train': True
 }
 
 cifar100_info = {
@@ -29,7 +32,9 @@ cifar100_info = {
   'mean': [0.5070757865905762, 0.48655030131340027, 0.4409191310405731],
   'std': [0.2673342823982239, 0.2564384639263153, 0.2761504650115967],
   'shape': [3, 32, 32],
-  'num_classes': 100
+  'num_classes': 100,
+  'task': 'classification',
+  'balanced_train': True
 }
 
 available_datasets = {
@@ -77,29 +82,31 @@ class GenericDataLoader:
     self.info_dict = {'dataset': f'{self.params["dataset"]}'}
     self.info_dict['seed'] = seed
     self.download_status = not os.path.exists(self.params['data_path'])
-    
-    
+     
     if self.download_status:
       os.makedirs(self.params['data_path'])
 
     if info is None:
         # Check if the dataset is available in the available_datasets dict
         if self.params['dataset'].lower() in available_datasets.keys():
+          dataset_family = "local"
           dataset_info = available_datasets[self.params['dataset'].lower()]
           mean = dataset_info['mean']
           std = dataset_info['std']
           channels, height, width = dataset_info['shape']
           self.num_classes = dataset_info['num_classes']
+          self.task = dataset_info['task']
           
         # check if the dataset is in the torchvision datasets and compute the parameters
         elif hasattr(torchvision.datasets, self.params['dataset'].upper()):
-          
+          dataset_family = "pytorch"
           if util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
             info_dataset = util.load_yaml(os.path.join(self.params['data_path'], 'data_info.txt'))
             mean = info_dataset['mean']
             std = info_dataset['std']
             channels, height, width = info_dataset['shape']
             self.num_classes = info_dataset['num_classes']
+            self.task = info_dataset['task']
           else:
             dataset_class = getattr(torchvision.datasets, self.params['dataset'].upper())
             dataset_ = dataset_class(self.params['data_path'], download=self.download_status, transform=ToTensor())
@@ -109,8 +116,10 @@ class GenericDataLoader:
             std = data[0].std(dim=(0, 2, 3)).tolist()
             channels, height, width = dataset_[0][0].shape
             self.num_classes = len(dataset_.classes)
+            self.task = 'classification'
           
         elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+          dataset_family = "medmnist"
           general_info = INFO[self.params['dataset'].lower()]
           if util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
             info_dataset = util.load_yaml(os.path.join(self.params['data_path'], 'data_info.txt'))
@@ -118,15 +127,17 @@ class GenericDataLoader:
             std = info_dataset['std']
             channels, height, width = info_dataset['shape']
             self.num_classes = info_dataset['num_classes']
+            self.task = info_dataset['task']
           else:
             dataset_class = getattr(medmnist, general_info['python_class'])
-            dataset_ = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=ToTensor())
+            dataset_ = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=ToTensor(), as_rgb=True)
             loader = DataLoader(dataset_, batch_size=len(dataset_), num_workers=0, shuffle=False)
             data = next(iter(loader))
             mean = data[0].mean(dim=(0, 2, 3)).tolist()
             std = data[0].std(dim=(0, 2, 3)).tolist()
             channels, height, width = dataset_[0][0].shape
             self.num_classes = len(general_info['label'])
+            self.task = general_info['task']
         else:
           raise ValueError(f"Dataset class {self.params['dataset']} not found in torchvision.datasets or available_datasets.")
         
@@ -137,9 +148,12 @@ class GenericDataLoader:
     self.info_dict['mean'] = mean
     self.info_dict['std'] = std
     self.info_dict['num_classes'] = self.num_classes
+    self.info_dict['task'] = self.task
     
     if not util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
       util.create_info_file(out_path=self.params['data_path'], info_dict=self.info_dict)
+    
+    self.download_status = not os.path.exists(self.params['data_path'])
     
     # Transformations
     self.transform = Compose([
@@ -148,16 +162,23 @@ class GenericDataLoader:
     ])
     
     if self.params['data_augmentation']:
-        pad = 4
-        self.train_transform = Compose([
-            Resize((height + pad, width + pad)),
-            RandomCrop((height, width)),
-            TrivialAugmentWide(num_magnitude_bins=31),
-            ToTensor(),
-            Normalize(mean=mean, std=std)
-        ])
+        if dataset_family == "medmnist":
+          self.train_transform = Compose([
+              TrivialAugmentWide(num_magnitude_bins=31),
+              ToTensor(),
+              Normalize(mean=mean, std=std)
+          ])
+        else:
+          pad = 4
+          self.train_transform = Compose([
+              Resize((height + pad, width + pad)),
+              RandomCrop((height, width)),
+              TrivialAugmentWide(num_magnitude_bins=31),
+              ToTensor(),
+              Normalize(mean=mean, std=std)
+          ])
     else:
-        self.train_transform = Compose([
+      self.train_transform = Compose([
             ToTensor(),
             Normalize(mean=mean, std=std)
         ])
@@ -177,14 +198,12 @@ class GenericDataLoader:
       dataset_class = getattr(torchvision.datasets, self.params['dataset'].upper())
       full_dataset = dataset_class(self.params['data_path'], train=True, download=self.download_status)
       test_dataset = dataset_class(self.params['data_path'], train=False, download=self.download_status,transform=self.transform)
-      self.download_status = not os.path.exists(self.params['data_path'])
       
     elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
       dataset_class = getattr(medmnist, INFO[self.params['dataset'].lower()]['python_class'])
-      train_dataset = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=self.train_transform)
-      valid_dataset = dataset_class(root=self.params['data_path'], split='val', download=self.download_status, transform=self.transform)
-      test_dataset = dataset_class(root=self.params['data_path'], split='test', download=self.download_status, transform=self.transform)
-      self.download_status = not os.path.exists(self.params['data_path'])
+      train_dataset = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=self.train_transform, as_rgb=True)
+      valid_dataset = dataset_class(root=self.params['data_path'], split='val', download=self.download_status, transform=self.transform, as_rgb=True)
+      test_dataset = dataset_class(root=self.params['data_path'], split='test', download=self.download_status, transform=self.transform, as_rgb=True)
     else:
       raise NotImplementedError('Custom dataset is not implemented yet.')
         
@@ -241,8 +260,8 @@ class GenericDataLoader:
       
       num_train = len(train_dataset)
       num_val = len(valid_dataset)
-      train_labels = [tuple(label) for label in train_dataset.labels]
-      val_labels = [tuple(label) for label in valid_dataset.labels]
+      train_labels = train_dataset.labels.squeeze().tolist()
+      val_labels = valid_dataset.labels.squeeze().tolist()
       
       train_samples = (int(self.train_split * self.params['limit_data_value'])) 
       val_samples = (int(self.params['limit_data_value'] - train_samples))
@@ -267,10 +286,6 @@ class GenericDataLoader:
         train_dataset = Subset(train_dataset, train_indices)
         valid_dataset = Subset(valid_dataset, val_indices)
 
-    else:
-      raise NotImplementedError('Custom dataset is not implemented yet.')
-    
-    
     train_loader = DataLoader(
       train_dataset,
       batch_size=self.params['batch_size'],
