@@ -138,6 +138,7 @@ class GenericDataLoader:
             channels, height, width = dataset_[0][0].shape
             self.num_classes = len(general_info['label'])
             self.task = general_info['task']
+            self.download_status = not os.path.exists(self.params['data_path'])
         else:
           raise ValueError(f"Dataset class {self.params['dataset']} not found in torchvision.datasets or available_datasets.")
         
@@ -153,7 +154,6 @@ class GenericDataLoader:
     if not util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
       util.create_info_file(out_path=self.params['data_path'], info_dict=self.info_dict)
     
-    self.download_status = not os.path.exists(self.params['data_path'])
     
     # Transformations
     self.transform = Compose([
@@ -198,6 +198,7 @@ class GenericDataLoader:
       dataset_class = getattr(torchvision.datasets, self.params['dataset'].upper())
       full_dataset = dataset_class(self.params['data_path'], train=True, download=self.download_status)
       test_dataset = dataset_class(self.params['data_path'], train=False, download=self.download_status,transform=self.transform)
+      self.download_status = not os.path.exists(self.params['data_path'])
       
     elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
       dataset_class = getattr(medmnist, INFO[self.params['dataset'].lower()]['python_class'])
