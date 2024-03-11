@@ -6,6 +6,9 @@ import re
 import json
 import matplotlib.pyplot as plt
 from shutil import rmtree
+import numpy as np
+import seaborn as sns
+import pandas as pd
 
 
 
@@ -82,42 +85,123 @@ def check_file_exists(file_path):
         return True
     else:
         return False
+def load_retrain_results(experiment_path, retrain_file_name):
+    file_path = os.path.join(experiment_path, retrain_file_name)
+    with open(file_path, 'r') as f:
+        retrain_data = json.load(f)    
+    return retrain_data
+    
+def plot_confusion_matrix(confusion_matrix, labels):
+    confusion_matrix= np.array(confusion_matrix)
+
+    df_cm = pd.DataFrame(confusion_matrix, index = labels, columns = labels)
+    plt.figure(figsize = (7,6))
+    sns.heatmap(confusion_matrix, annot=True, cmap='Blues', cbar=False, fmt='g')
+    plt.title('Confusion matrix - Retrained model')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.show()
         
-def plot_training_history(results_dict:dict, params:dict, retrain:bool=False):
+def test_acc_mean_std(experiment_path, retrain_file_name):
+    retrain_data = load_retrain_results(experiment_path, retrain_file_name)
+    test_acc_mean = np.mean([retrain_data[key]['test_accuracy'] for key in retrain_data.keys()])
+    test_acc_std = np.std([retrain_data[key]['test_accuracy'] for key in retrain_data.keys()])
+      
+    return test_acc_mean, test_acc_std    
+
+def agg_results(results_dict):
+    # Create an empty dictionary to store the mean and std for each variable
+    
+    agg_results_dict = {
+        "training_losses": [],
+        "validation_losses": [],
+        "training_accuracies": [],
+        "validation_accuracies": [],
+        # Add other variables as needed
+    }
+    # Loop through each dictionary and aggregate the results
+    for key in results_dict.keys():
+        current_dict = results_dict[key]  # Replace 'results_dicts' with the actual list of dictionaries
+        agg_results_dict["training_losses"].append(current_dict["training_losses"])
+        agg_results_dict["validation_losses"].append(current_dict["validation_losses"])
+        agg_results_dict["training_accuracies"].append(current_dict["training_accuracies"])
+        agg_results_dict["validation_accuracies"].append(current_dict["validation_accuracies"])
+    
+    # Convert the lists to NumPy arrays
+    agg_results_dict["training_losses"] = np.array(agg_results_dict["training_losses"])
+    agg_results_dict["validation_losses"] = np.array(agg_results_dict["validation_losses"])
+    agg_results_dict["training_accuracies"] = np.array(agg_results_dict["training_accuracies"])
+    agg_results_dict["validation_accuracies"] = np.array(agg_results_dict["validation_accuracies"])
+
+    # Calculate the mean and std across the first axis (axis=0)
+    agg_results_dict["mean_training_losses"] = np.mean(agg_results_dict["training_losses"], axis=0)
+    agg_results_dict["std_training_losses"] = np.std(agg_results_dict["training_losses"], axis=0)
+    agg_results_dict["mean_validation_losses"] = np.mean(agg_results_dict["validation_losses"], axis=0)
+    agg_results_dict["std_validation_losses"] = np.std(agg_results_dict["validation_losses"], axis=0)
+    agg_results_dict["mean_training_accuracies"] = np.mean(agg_results_dict["training_accuracies"], axis=0)
+    agg_results_dict["std_training_accuracies"] = np.std(agg_results_dict["training_accuracies"], axis=0)
+    agg_results_dict["mean_validation_accuracies"] = np.mean(agg_results_dict["validation_accuracies"], axis=0)
+    agg_results_dict["std_validation_accuracies"] = np.std(agg_results_dict["validation_accuracies"], axis=0)
+    
+    return agg_results_dict
+        
+def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=False, title:str=''):
     """ Plot the training history of a model.
     
     Args:
         results_dict: (dict) dictionary with the training history.
     """
-        
+    num_keys = len(results_dict.keys())
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
-    
-    total_epochs = len(results_dict["training_losses"])
+    keys = list(results_dict.keys())
+    total_epochs = len(results_dict[keys[0]]['training_losses'])
     epochs = range(1, total_epochs + 1)
     if retrain:
-        ax[0].plot(epochs, results_dict["training_losses"], 'b', label='Training loss')
-        ax[0].plot(epochs, results_dict["validation_losses"], 'r', label='Validation loss')
-        ax[0].set_title('Loss')
-        ax[0].set_xlabel('Epoch')
-        ax[0].set_ylabel('Loss')
-        ax[0].legend()
-        ax[0].grid(True)
-        
-
-        ax[1].plot(epochs, results_dict["training_accuracies"], 'b', label='Training Acc')
-        ax[1].plot(epochs, results_dict["validation_accuracies"], 'r', label='Validation Acc')
-        max_acc, index = max(results_dict["validation_accuracies"]), results_dict["validation_accuracies"].index(max(results_dict["validation_accuracies"]))
-        
-        ax[1].axhline(y=results_dict["test_accuracy"], color='r', linestyle='--', label='Test Acc')
-        ax[1].text(1, results_dict["test_accuracy"]+0.1, f'Test Acc: {results_dict["test_accuracy"]:.2f}', fontsize=12)
-
-        ax[1].plot(index+1, max_acc, 'go', label='Max Val Acc')
-        ax[1].text(index+1, max_acc+0.1, f'{max_acc:.2f}', fontsize=12)
-        ax[1].set_title('Accuracy')
-        ax[1].set_xlabel('Epoch')
-        ax[1].set_ylabel('Accuracy')
-        ax[1].legend()
-        ax[1].grid(True)
+        if num_keys > 1:
+            test_acc_mean = np.mean([results_dict[key]['test_accuracy'] for key in results_dict.keys()])
+            test_acc_std = np.std([results_dict[key]['test_accuracy'] for key in results_dict.keys()])
+            agg_results_dict = agg_results(results_dict)
+            ax[0].plot(epochs, agg_results_dict["mean_training_losses"], label='Training', color='blue')
+            ax[0].fill_between(epochs, 
+                               agg_results_dict["mean_training_losses"] - agg_results_dict["std_training_losses"], 
+                               agg_results_dict["mean_training_losses"] + agg_results_dict["std_training_losses"], 
+                               color='blue', alpha=0.2)
+            ax[0].plot(epochs, agg_results_dict["mean_validation_losses"], label='Validation', color='red')
+            ax[0].fill_between(epochs, 
+                               agg_results_dict["mean_validation_losses"] - agg_results_dict["std_validation_losses"], 
+                               agg_results_dict["mean_validation_losses"] + agg_results_dict["std_validation_losses"], 
+                               color='red', alpha=0.2)
+            ax[0].set_title('Loss')
+            ax[0].set_xlabel('Epochs')
+            ax[0].set_ylabel('Loss')
+            ax[0].legend(fontsize=12)
+            ax[0].grid(True)
+            ax[0].set_xlim([1, total_epochs])
+            ax[0].set_ylim([0, 1.5])
+            
+            ax[1].plot(epochs, agg_results_dict["mean_training_accuracies"], label='Training', color='blue')
+            ax[1].fill_between(epochs, 
+                               agg_results_dict["mean_training_accuracies"] - agg_results_dict["std_training_accuracies"], 
+                               agg_results_dict["mean_training_accuracies"] + agg_results_dict["std_training_accuracies"], 
+                               color='blue', alpha=0.2)
+            ax[1].plot(epochs, agg_results_dict["mean_validation_accuracies"], label='Validation', color='red')
+            ax[1].fill_between(epochs, 
+                               agg_results_dict["mean_validation_accuracies"] - agg_results_dict["std_validation_accuracies"], 
+                               agg_results_dict["mean_validation_accuracies"] + agg_results_dict["std_validation_accuracies"], 
+                               color='red', alpha=0.2)
+            
+            ax[1].axhline(y=test_acc_mean, color='green', linestyle='--', label='Test Accuracy')
+            ax[1].text(epochs[-2], test_acc_mean+1, f'{test_acc_mean:.2f} ± {test_acc_std:.2f}', ha='right', va='center', color='black', fontsize=14)
+            
+            ax[1].set_title('Accuracy')
+            ax[1].set_xlabel('Epochs')
+            ax[1].set_ylabel('Accuracy')
+            ax[1].legend(loc='lower right', fontsize=14)
+            ax[1].grid(True)
+            ax[1].set_xlim([1, total_epochs])
+            # add plt title
+            plt.suptitle(f'Training History: {title}', fontsize=16)
+            plt.show()
     else:
         eval_starts = params["max_epochs"] - params["epochs_to_eval"]
         epochs_val = range(eval_starts+1, total_epochs+1)
@@ -225,3 +309,41 @@ def init_log(log_level, name, file_path=None):
         logger.setLevel(logging.DEBUG)
 
     return logger
+
+def load_evolved_data(experiment_path: str):
+        """
+        Loads evolved data from the specified experiment path.
+
+        Parameters:
+        - experiment_path (str): The path to the experiment folder containing evolved data.
+
+        Returns:
+        None
+
+        This method reads the evolved data from the best-performing experiment folder within the specified path.
+        It extracts information such as neural network details, generation, and individual from the 'training_params.txt' file.
+
+        If the data is in an old format (generation and individual not specified in 'training_params.txt'),
+        it attempts to extract them from the folder name using a regular expression.
+
+        The extracted information is stored in the 'evolved_params' attribute of the class.
+
+        Note: This method assumes a specific folder and file structure for evolved data.
+        """
+
+        experiment_folders = [f.name for f in os.scandir(experiment_path) if f.is_dir()]
+        best_result_folder = [name for name in experiment_folders if name[0].isdigit()]
+        best_result_folder = os.path.join(experiment_path, best_result_folder[0])
+        with open(os.path.join(best_result_folder, 'training_params.txt'), 'r') as file:
+                best_individual_info = yaml.safe_load(file)
+        net_list = best_individual_info.get('net_list', [])
+        generation = best_individual_info.get('generation', 0)
+        individual = best_individual_info.get('individual', 0)
+        best_acc = best_individual_info.get('best_accuracy', 0.0)
+        
+        if generation == 0 and individual == 0: # only for old format
+                matches = re.search(r'(\d+)_(\d+)$', best_result_folder)
+                generation = int(matches.group(1))
+                individual = int(matches.group(2))
+
+        return {'net': net_list, 'generation': generation, 'individual': individual, 'best_accuracy': best_acc}
