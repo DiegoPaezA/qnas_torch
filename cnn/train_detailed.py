@@ -9,6 +9,7 @@ import os
 import time
 import numpy as np
 import torch
+from medmnist import INFO, Evaluator
 import torch.nn as nn
 from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
@@ -16,7 +17,7 @@ from sklearn.metrics import confusion_matrix
 from cnn import model, input
 from util import create_info_file, init_log, load_yaml
 from torch.profiler import profile, record_function, ProfilerActivity
-from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, MultiStepLR
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
 log_directory = os.path.join(current_directory, 'logs')
@@ -38,24 +39,35 @@ def realese_gpu_memory(gpu_name='cuda:0'):
     #print(f"Allocated GPU memory: {torch.cuda.memory_allocated() / (1024 ** 3):.2f} GB")
     #print(f"Reserved GPU memory: {torch.cuda.memory_reserved() / (1024 ** 3):.2f} GB")
 
-def compute_confusion_matrix(model, data_loader, device):
+def compute_metrics(model, data_loader, params):
     model.eval()
     all_labels = []
     all_predictions = []
-
+    auc, acc = 0, 0
+    y_score = torch.tensor([]).to(params['device'])
+    
     with torch.no_grad():
         for inputs, labels in data_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
+            inputs, labels = inputs.to(params['device']), labels.to(params['device'])
             y_logits = model(inputs)
             _, predicted = y_logits.max(1)
 
             all_labels.extend(labels.cpu().numpy())
             all_predictions.extend(predicted.cpu().numpy())
+            if params['task'] == 'multi-class':
+                output = y_logits.softmax(dim=-1)
+                y_score = torch.cat((y_score, output), 0)
+
+        if params['task'] == 'multi-class':
+            y_score = y_score.cpu().detach().numpy()
+            evaluator = Evaluator(params['dataset'], split='test', root=params['data_path'])
+            metrics = evaluator.evaluate(y_score)
+            auc, acc = metrics
 
     conf_matrix = confusion_matrix(all_labels, all_predictions)
-    return conf_matrix
+    return conf_matrix, auc, acc
 
-def reset_and_load_best_model(params, best_model_path, device):
+def reset_and_load_best_model(params, best_model_path):
     # Reinitialize the original model
     
     best_model = model.NetworkGraph(num_classes=params["num_classes"], mu=0.99)
@@ -66,20 +78,24 @@ def reset_and_load_best_model(params, best_model_path, device):
     _ = best_model(input_random)
     # Load the state dictionary of the best model into the new model
     best_model.load_state_dict(torch.load(best_model_path))
-    best_model.to(device)
+    best_model.to(params['device'])
 
     return best_model
 
-def train_epoch(model, criterion, optimizer, data_loader, device):
+def train_epoch(model, criterion, optimizer, data_loader, params):
     model.train()
     train_loss = 0.0
     correct = 0
     total = 0
 
     for inputs, labels in data_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
+        inputs, labels = inputs.to(params['device']), labels.to(params['device'])
         optimizer.zero_grad()
         y_logits = model(inputs)
+        
+        if params['task'] == 'multi-class':
+            labels = labels.squeeze().long() # medmnist
+            
         loss = criterion(y_logits, labels)
         loss.backward()
         optimizer.step()
@@ -92,7 +108,7 @@ def train_epoch(model, criterion, optimizer, data_loader, device):
     train_loss /= len(data_loader)
     return train_loss, accuracy
 
-def evaluate(model, criterion, data_loader, device, test=False):
+def evaluate(model, criterion, data_loader, params, test=False):
     model.eval()
     eval_loss = 0.0
     correct = 0
@@ -100,8 +116,12 @@ def evaluate(model, criterion, data_loader, device, test=False):
 
     with torch.no_grad():
         for inputs, labels in data_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
+            inputs, labels = inputs.to(params['device']), labels.to(params['device'])
             y_logits = model(inputs)
+            
+            if params['task'] == 'multi-class':
+                labels = labels.squeeze().long() # medmnist
+                
             loss = criterion(y_logits, labels)
             eval_loss += loss.item()
             _, predicted = y_logits.max(1)
@@ -112,8 +132,8 @@ def evaluate(model, criterion, data_loader, device, test=False):
     eval_loss /= len(data_loader)
     
     if test:
-        confusion_matrix = compute_confusion_matrix(model, data_loader, device)
-        return eval_loss, accuracy, confusion_matrix
+        confusion_matrix, auc, acc = compute_metrics(model, data_loader, params)
+        return eval_loss, accuracy, auc, acc , confusion_matrix
 
     return eval_loss, accuracy
 
@@ -123,8 +143,7 @@ def train(model: torch.nn.Module,
           train_loader: torch.utils.data.DataLoader,
           val_loader: torch.utils.data.DataLoader,
           test_loader: torch.utils.data.DataLoader,
-          params: Dict[str, Union[int, float, str]],
-          device: torch.device) -> Dict[str, Union[List[float], float]]:
+          params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
     """
     Retrain a convolutional neural network model.
 
@@ -138,7 +157,9 @@ def train(model: torch.nn.Module,
         params (Dict[str, Union[int, float, str]]): Dictionary with parameters necessary for training.
             - 'max_epochs' (int): Number of epochs to train.
             - 'model_path' (str): Path to save the trained model.
-        device (torch.device): Device to run the training on (CPU or GPU).
+            - 'lr_scheduler' (str): Learning rate scheduler to use.
+            - 'experiment_path' (str): Path to save the experiment.
+            - 'device' (str): Device to use for training.
 
     Returns:
         Dict[str, Union[List[float], float]]: Dictionary with the training results.
@@ -150,7 +171,10 @@ def train(model: torch.nn.Module,
         - 'best_accuracy' (float): Best validation accuracy achieved.
         - 'test_loss' (float): Loss on the test set.
         - 'test_accuracy' (float): Accuracy on the test set.
+        - 'auc_score' (float): AUC score on the test set.
+        - 'acc_medmnist' (float): Accuracy on the test set.
         - 'confusion_matrix' (numpy.ndarray): Confusion matrix on the test set.
+        - 'total_trainable_params' (int): Total number of trainable parameters in the model.
     """
     model.train()
     training_losses = []
@@ -158,8 +182,11 @@ def train(model: torch.nn.Module,
     validation_losses = []
     validation_accuracies = []
     best_accuracy = 0.0
+    auc_value = 0.0
+    acc_med = 0.0
     training_results = {}
     max_epochs = params['max_epochs']
+    milestones = [0.5 * max_epochs, 0.75 * max_epochs]
 
     best_model_path = os.path.join(params['model_path'], 'best_model.pth')
     
@@ -169,21 +196,21 @@ def train(model: torch.nn.Module,
         lr_scheduler = ReduceLROnPlateau(optimizer, patience=5, factor=0.1)
     elif params['lr_scheduler'] == 'cosine':
         lr_scheduler = CosineAnnealingLR(optimizer, T_max=max_epochs, eta_min=0, last_epoch=-1)
-    elif params['lr_scheduler'] == 'step':
-        lr_scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
+    elif params['lr_scheduler'] == 'multistep':
+        lr_scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
     else:
         lr_scheduler = None
     #for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
     for epoch in range(1, max_epochs + 1):
-        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device)
+        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, params)
         training_losses.append(train_loss)
         training_accuracies.append(train_accuracy)
         
-        validation_loss, accuracy = evaluate(model, criterion, val_loader, device)
+        validation_loss, accuracy = evaluate(model, criterion, val_loader, params)
         validation_losses.append(validation_loss)
         validation_accuracies.append(accuracy)
         
-        if accuracy > best_accuracy:
+        if accuracy > best_accuracy and  epoch % params['save_checkpoints_epochs'] == 0: 
             best_accuracy = accuracy
             torch.save(model.state_dict(), best_model_path)
             create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
@@ -198,8 +225,8 @@ def train(model: torch.nn.Module,
             else:
                 lr_scheduler.step()
         
-    best_model_loaded = reset_and_load_best_model(params, best_model_path, device)
-    test_loss, test_accuracy, confusion_matrix = evaluate(best_model_loaded, criterion, test_loader, device, test=True)
+    best_model_loaded = reset_and_load_best_model(params, best_model_path)
+    test_loss, test_accuracy, auc_value, acc_med, confusion_matrix = evaluate(best_model_loaded, criterion, test_loader, params, test=True)
     
     LOGGER.info(f"Experiment: {params['experiment_path']} - Test loss: {test_loss:.2f} - Test accuracy: {test_accuracy:.2f}%")
     #print(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
@@ -208,6 +235,9 @@ def train(model: torch.nn.Module,
     
     create_info_file(params['model_path'], params, 'retraining_params.txt')
     
+    total_trainable_params = sum(p.numel() for p in best_model_loaded.parameters() if p.requires_grad)
+    
+    training_results['total_trainable_params'] = total_trainable_params
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
     training_results['validation_losses'] = validation_losses
@@ -215,6 +245,8 @@ def train(model: torch.nn.Module,
     training_results['best_accuracy'] = best_accuracy
     training_results['test_loss'] = test_loss
     training_results['test_accuracy'] = test_accuracy
+    training_results['auc_score'] = auc_value
+    training_results['acc_medmnist'] = acc_med
     training_results['confusion_matrix'] = confusion_matrix.tolist()
             
     return training_results
@@ -245,7 +277,10 @@ def train_and_eval(params: Dict[str, Any],
         - 'best_accuracy' (float): Best validation accuracy achieved.
         - 'test_loss' (float): Loss on the test set.
         - 'test_accuracy' (float): Accuracy on the test set.
+        - 'auc_score' (float): AUC score on the test set.
+        - 'acc_medmnist' (float): Accuracy on the test set.
         - 'confusion_matrix' (numpy.ndarray): Confusion matrix on the test set.
+        - 'total_trainable_params' (int): Total number of trainable parameters in the model.
     """
     
     device = params['device']
@@ -256,7 +291,6 @@ def train_and_eval(params: Dict[str, Any],
     
     LOGGER.info(f"Start retraining of the experiment: {params['experiment_path']}")
     # Load data information
-        # Load data info
     if hasattr(input.available_datasets, params['dataset'].lower()):
         dataset_info = input.available_datasets[params['dataset'].lower()]
     else:
@@ -271,8 +305,7 @@ def train_and_eval(params: Dict[str, Any],
     params['net_list'] = net_list
     params['fn_dict'] = fn_dict
     params['num_classes'] = dataset_info["num_classes"]
-
-    device = params['device']
+    params['task'] = dataset_info["task"]
     
     # Add the fully connected layer to the model
     input_shape =  [params['batch_size']] + dataset_info['shape']
@@ -297,7 +330,7 @@ def train_and_eval(params: Dict[str, Any],
     params['t0'] = time.time()
     
     try:
-        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params, device)
+        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params)
     except Exception as e:
         if "out of memory" in str(e):
             LOGGER.error(f"Out of memory error: {e}")
