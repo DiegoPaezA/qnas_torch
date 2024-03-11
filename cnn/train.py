@@ -37,19 +37,21 @@ LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
 
 
-def train_epoch(model, criterion, optimizer, data_loader, device, scaler, enabled_mixed_precision):
+def train_epoch(model, criterion, optimizer, data_loader, params, scaler):
     model.train()
     train_loss = 0.0
     correct = 0
     total = 0
+    device = params['device']
     amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
     for inputs, labels in data_loader:
-        labels = labels.squeeze().long()
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
         
-        with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=enabled_mixed_precision):
+        with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
             y_logits = model(inputs)
+            if params['task'] == 'multi-class':
+                labels = labels.squeeze().long()
             loss = criterion(y_logits, labels)
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -63,19 +65,21 @@ def train_epoch(model, criterion, optimizer, data_loader, device, scaler, enable
     train_loss /= len(data_loader)
     return train_loss, accuracy
 
-def evaluate(model, criterion, data_loader, device, enabled_mixed_precision):
+def evaluate(model, criterion, data_loader, params):
     model.eval()
     validation_loss = 0.0
     correct = 0
     total = 0
+    device = params['device']
     amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
 
     with torch.no_grad():
         for inputs, labels in data_loader:
-            labels = labels.squeeze().long()
             inputs, labels = inputs.to(device), labels.to(device)
-            with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=enabled_mixed_precision):
+            with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
                 y_logits = model(inputs)
+                if params['task'] == 'multi-class':
+                    labels = labels.squeeze().long() # medmnist
                 loss = criterion(y_logits, labels)
             validation_loss += loss.item()
             _, predicted = y_logits.max(1)
@@ -89,7 +93,7 @@ def evaluate(model, criterion, data_loader, device, enabled_mixed_precision):
 
 def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer, 
           train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
-          params:Dict, device:torch.device, debug=False) -> Dict:
+          params:Dict, debug=False) -> Dict:
     """
     Train a neural network model.
 
@@ -118,20 +122,22 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     validation_losses = []
     validation_accuracies = []
     best_accuracy = 0.0
+    mean_eval_accuracy = 0.0
+    median_eval_accuracy = 0.0
+    
     training_results = {}
     max_epochs = params['max_epochs']
     epochs_to_eval = params['epochs_to_eval']
-    enabled_mixed_precision = params['mixed_precision']
     start_eval = max_epochs - epochs_to_eval
     #best_model_path = os.path.join(params['model_path'], 'best_model.pt')
     
     # Automatic mixed precision training (AMP)
-    scaler = GradScaler(enabled=enabled_mixed_precision) 
+    scaler = GradScaler(enabled=params['mixed_precision']) 
     # if enabled_mixed_precision:
     #     LOGGER.info("Mixed precision training enabled")
     
     for epoch in range(1, max_epochs + 1):
-        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, device, scaler, enabled_mixed_precision)
+        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, params,scaler)
         training_losses.append(train_loss)
         training_accuracies.append(train_accuracy)
 
@@ -140,7 +146,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             raise TimeoutError()
         
         if epoch > start_eval:
-            validation_loss, accuracy = evaluate(model, criterion, val_loader, device, enabled_mixed_precision)
+            validation_loss, accuracy = evaluate(model, criterion, val_loader, params)
             validation_losses.append(validation_loss)
             validation_accuracies.append(accuracy)
 
@@ -154,12 +160,15 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
         if debug:    
             if epoch % 5 == 0 and epoch < start_eval:
                 print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
+    
+    mean_eval_accuracy = float(np.mean(validation_accuracies))
+    median_eval_accuracy = float(np.median(validation_accuracies))
             
     params['t1'] = time.time()
     params['training_time'] = params['t1'] - params['t0']
     
     # Measure inference time
-    inference_images = next(iter(val_loader))[0][:10].to(device)
+    inference_images = next(iter(val_loader))[0][:10].to(params['device'])
     
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
         with record_function("model_inference"):
@@ -177,6 +186,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     params['cpu_inference_time'] = cpu_inference_time
     params['model_memory_usage'] = model_memory_usage
     params['best_accuracy'] = best_accuracy
+    params['mean_eval_accuracy'] = mean_eval_accuracy
+    params['median_eval_accuracy'] = median_eval_accuracy
 
     
     LOGGER.info(f"Cuda Inference time: {cuda_inference_time} microseconds")
@@ -190,7 +201,10 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['validation_accuracies'] = validation_accuracies
     training_results['cuda_inference_time'] = cuda_inference_time # in microseconds
     training_results['model_memory_usage'] = model_memory_usage # in MB
-    training_results['best_accuracy'] = best_accuracy        
+    training_results['total_trainable_params'] = total_trainable_params
+    training_results['best_accuracy'] = best_accuracy
+    training_results['mean_eval_accuracy'] = mean_eval_accuracy
+    training_results['median_eval_accuracy'] = median_eval_accuracy        
     return training_results
 
 
@@ -231,26 +245,32 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     params['model_path'] = model_path
     params['generation'] = id_num.split('_')[0]
     params['individual'] = id_num.split('_')[1]
-    
+     
     LOGGER.info(f"Training model {id_num} on device {device} ...")
-    
     # Load data info
     if hasattr(input.available_datasets, params['dataset'].lower()):
         dataset_info = input.available_datasets[params['dataset'].lower()]
     else:
         dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
+    
+    params['num_classes'] = dataset_info["num_classes"]
+    params['task'] = dataset_info["task"]
         
+    # check if cbam is a key in the fn_dict
+    has_cbam_key = any(key.startswith("cbam") for key in fn_dict)
     
     # Create the model
     model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
-    model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
+    model_net.create_functions(fn_dict=filtered_dict, net_list=net_list, cbam=has_cbam_key)
     
     # Add the fully connected layer to the model
     input_shape =  [params['batch_size']] + dataset_info['shape']
     inputs = torch.randn(input_shape)
     _ = model_net(inputs)
     model_net.to(device)
+    
+    params['input_shape'] = input_shape
     
     criterion = nn.CrossEntropyLoss()
     
@@ -268,16 +288,27 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     
     # Train the model in fitness scheme
     try:
-        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,device,debug)
-        LOGGER.info(f"Training of model {id_num} finished, best accuracy: {round(results_dict['best_accuracy'], 2)}")
+        results_dict = train(model_net, criterion, optimizer, train_loader, val_loader,params,debug)
         if debug:
             result = results_dict
             return result
         else:
             #return_val.value = results_dict['best_accuracy']
-            return_val[0] = results_dict['best_accuracy']
-            return_val[1] = results_dict['model_memory_usage']
-            return_val[2] = results_dict['cuda_inference_time']
+            if params['fitness_metric'] == 'best_accuracy':
+                return_val[0] = results_dict['best_accuracy']
+                return_val[1] = results_dict['model_memory_usage']
+                return_val[2] = results_dict['cuda_inference_time']
+            elif params['fitness_metric'] == 'mean_accuracy':
+                return_val[0] = results_dict['mean_eval_accuracy']
+                return_val[1] = results_dict['model_memory_usage']
+                return_val[2] = results_dict['cuda_inference_time']
+            elif params['fitness_metric'] == 'median_accuracy':
+                return_val[0] = results_dict['median_eval_accuracy']
+                return_val[1] = results_dict['model_memory_usage']
+                return_val[2] = results_dict['cuda_inference_time']
+            else:
+                raise ValueError(f"Invalid fitness metric: {params['fitness_metric']}")
+        LOGGER.info(f"Training of model {id_num} finished, best {params['fitness_metric']}: {round(return_val[0], 2)}")
         
     except TimeoutError:
         LOGGER.error("Training timed out. Penalizing the model with accuracy 0.0.")
