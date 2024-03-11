@@ -107,6 +107,8 @@ class ConfigParameters(object):
                                ('optimizer', str),
                                ('device', str),
                                ('dataset', str),
+                               ('mixed_precision', bool),
+                               ('fitness_metric', str),
                                ('data_augmentation', bool),
                                ('subtract_mean', bool),
                                ('save_checkpoints_epochs', int),
@@ -146,6 +148,14 @@ class ConfigParameters(object):
         self._get_fn_spec()
 
         self.train_spec['experiment_path'] = self.args['experiment_path']
+        self.train_spec['fitness_metric'] = self.args['fitness_metric']
+        self.train_spec['optimizer'] = self.args['optimizer']
+        self.train_spec['data_augmentation'] = self.args['data_augmentation']
+        self.train_spec['save_checkpoints_epochs'] = self.args['save_checkpoints_epochs']
+        self.train_spec['dataset'] = self.args['dataset']
+        self.train_spec['data_path'] = self.args['data_path']
+        
+        
 
     def _get_fn_spec(self):
         """ Organize the function specifications in *self.fn_list*, *self.fn_dict* and
@@ -174,7 +184,7 @@ class ConfigParameters(object):
             strides = self.fn_dict[fn]['params'].get('strides')
             if strides and strides > 1:
                 self.QNAS_spec['reducing_fns_list'].append(fn)
-
+                
         for item in self.fn_dict.values():
             del item['prob']
 
