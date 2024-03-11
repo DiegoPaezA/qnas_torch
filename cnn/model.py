@@ -91,10 +91,10 @@ class CBAMBlock(nn.Module):
         kernel_size (int, optional): Size of the convolutional kernel for spatial attention. Default is 7.
     """
 
-    def __init__(self, in_channels, reduction_ratio=16, kernel_size=7):
+    def __init__(self, in_channels=1, reduction_ratio=16, kernel=7):
         super(CBAMBlock, self).__init__()
         self.channel_attention = ChannelAttention(in_channels, reduction_ratio)
-        self.spatial_attention = SpatialAttention(kernel_size)
+        self.spatial_attention = SpatialAttention(kernel)
 
     def forward(self, x):
         """
@@ -345,85 +345,6 @@ class DepthConvBlock(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
             
         return tensor
-
-class SEDepthConvBlock(nn.Module):
-    """
-    Squeeze-and-Excitation Depthwise Separable Convolution Block.
-    """
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
-        """
-        Initializes the Squeeze-and-Excitation Depthwise Separable Convolution block.
-
-        Args:
-            in_channel : int
-                Represents the number of channels in the input image (default 3 for RGB)
-            kernel : int
-                Represents the size of the convolutional window (3 means [3,3])
-            filters : int
-                Number of filters
-            strides : int
-                Represents the stride of the convolutional window (3 means [3,3])
-            mu : float
-                Mean for the batch normalization
-            epsilon : float
-                Epsilon for the batch normalization
-            reduction_ratio : int, optional 
-                Reduction ratio for the SE block. Default is 16.
-        """
-        super(SEDepthConvBlock, self).__init__()
-        
-        self.depth_conv_block = DepthConvBlock(kernel,in_channels,filters,strides,mu,epsilon,channels_last)
-        self.se_block = SEBlock(filters, reduction_ratio=reduction_ratio) # in_channels = output size of depth_conv_block (filters)
-
-    def forward(self, x):
-        """
-        Forward pass through the Squeeze-and-Excitation Depthwise Separable Convolution block.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns:
-            torch.Tensor: Output tensor after applying the Squeeze-and-Excitation Depthwise Separable Convolution block.
-        """
-        x = self.depth_conv_block(x)
-
-        # Apply SE block for channel-wise attention
-        x = self.se_block(x)
-
-        return x
-
-class CBAMDepthConvBlock(nn.Module):
-    """
-    Depthwise Separable Convolution Block with Convolutional Block Attention Module (CBAM).
-
-    Args:
-        in_channels (int): Number of input channels.
-        filters (int): Number of filters (output channels).
-        kernel (int, optional): Size of the convolutional kernel. Default is 3.
-        stride (int, optional): Stride of the convolutional operation. Default is 1.
-        padding (int, optional): Padding for the convolutional operation. Default is 1.
-        reduction_ratio (int, optional): Reduction ratio for the channel attention block. Default is 16.
-    """
-
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
-        super(CBAMDepthConvBlock, self).__init__()
-
-        self.depth_conv_block = DepthConvBlock(kernel,in_channels,filters,strides,mu,epsilon,channels_last)
-        self.cbam_block = CBAMBlock(filters, reduction_ratio)
-
-    def forward(self, x):
-        """
-        Forward pass through the CBAM Convolutional Block.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns:
-            torch.Tensor: Output tensor after applying CBAM Convolutional Block.
-        """
-        x = self.depth_conv_block(x)
-        x = self.cbam_block(x)
-        return x
     
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
@@ -591,6 +512,7 @@ class ResidualV1CBAM(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
 
         return tensor
+    
 class ResidualV1Pr(nn.Module):
     """ Residual V1 block with projection shortcut """
     def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
@@ -785,8 +707,7 @@ class FullyConnected(nn.Module):
         self.units = units                
         self.fc = nn.Linear(in_features=self.inputs__features,
                             out_features=self.units)
-                   
-        init.kaiming_normal_(self.fc.weight, mode='fan_out', nonlinearity='relu')
+        init.kaiming_normal_(self.fc.weight,nonlinearity='relu')                   
         
     def forward(self, inputs):
         """ FullyConnected layer.
@@ -808,12 +729,9 @@ class NoOp(nn.Module):
 functions_dict = {'ConvBlock': ConvBlock,
                   'DepthConvBlock': DepthConvBlock,
                   'SEConvBlock': SEConvBlock,
-                  'SEDepthConvBlock': SEDepthConvBlock,
                   'CBAMConvBlock': CBAMConvBlock,
-                  'CBAMDepthConvBlock': CBAMDepthConvBlock,
-                  'ResidualV1': ResidualV1,
                   'ResidualV1CBAM': ResidualV1CBAM,
-                  'ResidualV1Pr': ResidualV1Pr,
+                  'CBAMBlock' : CBAMBlock,
                   'MaxPooling': MaxPooling,
                   'AvgPooling': AvgPooling,
                   'FullyConnected': FullyConnected,
@@ -869,7 +787,7 @@ class NetworkGraph(nn.Module):
         self.in_channels = in_channels
         #self.layer_dict = nn.ModuleDict()
         
-    def create_functions(self, net_list, fn_dict):
+    def create_functions(self, net_list, fn_dict, cbam=False):
         """ Generate all possible functions from functions descriptions in *self.fn_dict*.
 
         Args:
@@ -878,17 +796,25 @@ class NetworkGraph(nn.Module):
         """
         in_channels = self.in_channels
         self.layers = []
+        if cbam:
+            # Fix the first layer with a 1x1 convolution 
+            net_list.insert(0, 'conv_1_1_32')
+            conv_1_1_info = {'conv_1_1_32': {'function': 'ConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}}}
+            fn_dict.update(conv_1_1_info)
 
         for name in net_list:
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'SEDepthConvBlock', 'CBAMConvBlock', 'CBAMDepthConvBlock','ResidualV1', 'ResidualV1CBAM']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMConvBlock', 'ResidualV1CBAM']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
                 in_channels = parameters['params']['filters']
             
+            if parameters['function'] in ['CBAMBlock']:
+                parameters['params']['in_channels'] = in_channels
+   
             self.layers.append(functions_dict[parameters['function']](**parameters['params']))
         self.model = nn.Sequential(*self.layers)
         self.fc = None
@@ -904,7 +830,7 @@ class NetworkGraph(nn.Module):
         Returns:
             logits tensor.
         """
-        # print(f'inputs.shape: {inputs.shape}')
+        #print(f'inputs.shape: {inputs.shape}')
         if debug:
             for f in self.layers:
                 print(f'f: {f}')
