@@ -52,7 +52,8 @@ if __name__ == '__main__':
     parser.add_argument('--experiment_path', type=str, required=True,
                         help='Directory where to write logs and model files.')
     parser.add_argument('--data_path', type=str, required=True, help='Path to input data.')
-    parser.add_argument('--dataset', type=str, required=True, help='Dataset name.', choices=['cifar10', 'cifar100', 'pathmnist'])
+    parser.add_argument('--dataset', type=str, required=True,  help='Dataset name.', 
+                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist'])
     parser.add_argument('--config_file', type=str, required=True,
                         help='Configuration file name.')
     parser.add_argument('--continue_path', type=str, default='',
@@ -61,6 +62,14 @@ if __name__ == '__main__':
                              'loaded from this folder.')
     parser.add_argument('--log_level', choices=['NONE', 'INFO', 'DEBUG'], default='NONE',
                         help='Logging information level.')
+    parser.add_argument('--optimizer', type=str, default='AdamW', choices=['RMSProp', 'Adam', 'AdamW', 'SGD'],
+                        help='Optimizer to be used during training. Default = AdamW.')
+    parser.add_argument('--fitness_metric', type=str, default='best_accuracy', choices=['best_accuracy', 'mean_accuracy', 'median_accuracy'],
+                        help='Fitness metric to be used during evolution. Default = accuracy.')
+    parser.add_argument('--data_augmentation', action='store_true',
+                    help='Disable data augmentation during training. Default = False.')
+    parser.add_argument('--save_checkpoints_epochs', type=int, default=5,
+                        help='Number of epochs to save the model. Default = 5.')
 
     arguments = parser.parse_args()
 
