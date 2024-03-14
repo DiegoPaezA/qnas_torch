@@ -70,7 +70,8 @@ if __name__ == '__main__':
     parser.add_argument('--experiment_path', type=str, required=True,
                         help='Directory where the evolved network logs are.')
     parser.add_argument('--data_path', type=str, required=True, help='Path to input data.')
-    parser.add_argument('--dataset', type=str, required=True, help='Dataset name.', choices=['cifar10', 'cifar100', 'pathmnist'])
+    parser.add_argument('--dataset', type=str, required=True, help='Dataset name.', 
+                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist'])
     parser.add_argument('--retrain_folder', type=str, default='retrain',
                         help='Name of the folder with retrain model files that will be saved '
                              'inside *experiment_path*.')
