@@ -207,6 +207,8 @@ class GenericDataLoader:
       test_dataset = dataset_class(root=self.params['data_path'], split='test', download=self.download_status, transform=self.transform, as_rgb=True)
     else:
       raise NotImplementedError('Custom dataset is not implemented yet.')
+    
+    drop_last = True if self.params['dataset'].lower() == 'organamnist' else False
         
     if not for_train:
       test_loader = DataLoader(
@@ -214,6 +216,7 @@ class GenericDataLoader:
         batch_size=self.params['eval_batch_size'],
         num_workers=self.params['num_workers'],
         shuffle=False,
+        drop_last=drop_last,
         pin_memory=True,
         pin_memory_device=pin_memory_device)
       return test_loader
@@ -287,11 +290,13 @@ class GenericDataLoader:
         train_dataset = Subset(train_dataset, train_indices)
         valid_dataset = Subset(valid_dataset, val_indices)
 
+    
     train_loader = DataLoader(
       train_dataset,
       batch_size=self.params['batch_size'],
       num_workers=self.params['num_workers'],
       shuffle=True,
+      drop_last=drop_last,
       pin_memory=True, 
       pin_memory_device=pin_memory_device)
 
@@ -300,6 +305,7 @@ class GenericDataLoader:
       batch_size=self.params['eval_batch_size'],
       num_workers=self.params['num_workers'],
       shuffle=False,
+      drop_last=drop_last,
       pin_memory=True, 
       pin_memory_device=pin_memory_device)
   
