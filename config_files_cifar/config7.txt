@@ -85,3 +85,8 @@ train:
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
     threads: 0
+
+    # scalarized objective weights
+    acc_weight: 0.7
+    params_weight: 0.15
+    time_weight: 0.15

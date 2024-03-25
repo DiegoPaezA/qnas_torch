@@ -2,7 +2,7 @@
 
 QNAS:
     crossover_rate: 0.5
-    max_generations: 100
+    max_generations: 5
     max_num_nodes: 20
     num_quantum_ind: 4
     penalize_number: 3
@@ -55,3 +55,8 @@ train:
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
     threads: 0
+
+    # scalarized objective weights
+    acc_weight: 0.7
+    params_weight: 0.15
+    time_weight: 0.15

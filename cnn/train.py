@@ -26,6 +26,8 @@ from torch.profiler import profile, record_function, ProfilerActivity
 
 
 TRAIN_TIMEOUT = 5400
+MAX_PARAMS = 11170884 # Maximum number of parameters for a model - ResNet18 has 11,170,884 parameters
+MAX_INFER_TIME = 2586 # Maximum inference time in microseconds
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
 log_directory = os.path.join(current_directory, 'logs')
@@ -177,6 +179,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     total_params = sum(p.numel() for p in model.parameters())
     total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
+    # Scalarized multi-objective function
+    scalar_multi_objective = params['acc_weight']*best_accuracy - params['params_weight']*(total_trainable_params / MAX_PARAMS) - params['time_weight']*(cuda_inference_time / MAX_INFER_TIME)
+    
     params['total_params'] = total_params
     params['total_trainable_params'] = total_trainable_params
     params['cuda_inference_time'] = cuda_inference_time
@@ -185,6 +190,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     params['best_accuracy'] = best_accuracy
     params['mean_eval_accuracy'] = mean_eval_accuracy
     params['median_eval_accuracy'] = median_eval_accuracy
+    params['scalar_multi_objective'] = scalar_multi_objective
 
     
     LOGGER.info(f"Cuda Inference time: {cuda_inference_time} microseconds")
@@ -201,7 +207,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['total_trainable_params'] = total_trainable_params
     training_results['best_accuracy'] = best_accuracy
     training_results['mean_eval_accuracy'] = mean_eval_accuracy
-    training_results['median_eval_accuracy'] = median_eval_accuracy        
+    training_results['median_eval_accuracy'] = median_eval_accuracy
+    training_results['scalar_multi_objective'] = scalar_multi_objective        
     return training_results
 
 
