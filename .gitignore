@@ -112,6 +112,10 @@ ENV/
 # Dataset files
 cifar10_data/
 cifar100_data/
+octmnist_data/
+organamnist_data/
+pathmnist_data/
+tissuemnist_data/
 
 # Results
 exp*/
