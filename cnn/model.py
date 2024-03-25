@@ -837,7 +837,7 @@ class NetworkGraph(nn.Module):
                 inputs = f(inputs)
                 print(f'layer output.shape: {inputs.shape}')
         else:
-            inputs = self.model(inputs)
+            inputs = self.model(inputs) # BUG: the model is not being updated when the dataset is not downloaded before running the training
             #print(f'layer output.shape: {inputs.shape}')
 
         if self.fc is None:

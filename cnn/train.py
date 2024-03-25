@@ -129,13 +129,10 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     max_epochs = params['max_epochs']
     epochs_to_eval = params['epochs_to_eval']
     start_eval = max_epochs - epochs_to_eval
-    #best_model_path = os.path.join(params['model_path'], 'best_model.pt')
     
     # Automatic mixed precision training (AMP)
     scaler = GradScaler(enabled=params['mixed_precision']) 
-    # if enabled_mixed_precision:
-    #     LOGGER.info("Mixed precision training enabled")
-    
+
     for epoch in range(1, max_epochs + 1):
         train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, params,scaler)
         training_losses.append(train_loss)
