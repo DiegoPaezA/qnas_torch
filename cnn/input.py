@@ -138,7 +138,6 @@ class GenericDataLoader:
             channels, height, width = dataset_[0][0].shape
             self.num_classes = len(general_info['label'])
             self.task = general_info['task']
-            self.download_status = not os.path.exists(self.params['data_path'])
         else:
           raise ValueError(f"Dataset class {self.params['dataset']} not found in torchvision.datasets or available_datasets.")
         
@@ -171,8 +170,8 @@ class GenericDataLoader:
         else:
           pad = 4
           self.train_transform = Compose([
-              Resize((height + pad, width + pad)),
-              RandomCrop((height, width)),
+              #Resize((height + pad, width + pad)),
+              #RandomCrop((height, width)),
               TrivialAugmentWide(num_magnitude_bins=31),
               ToTensor(),
               Normalize(mean=mean, std=std)
@@ -205,6 +204,7 @@ class GenericDataLoader:
       train_dataset = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=self.train_transform, as_rgb=True)
       valid_dataset = dataset_class(root=self.params['data_path'], split='val', download=self.download_status, transform=self.transform, as_rgb=True)
       test_dataset = dataset_class(root=self.params['data_path'], split='test', download=self.download_status, transform=self.transform, as_rgb=True)
+      self.download_status = not os.path.exists(self.params['data_path'])
     else:
       raise NotImplementedError('Custom dataset is not implemented yet.')
     
@@ -216,7 +216,6 @@ class GenericDataLoader:
         batch_size=self.params['eval_batch_size'],
         num_workers=self.params['num_workers'],
         shuffle=False,
-        drop_last=drop_last,
         pin_memory=True,
         pin_memory_device=pin_memory_device)
       return test_loader
@@ -305,7 +304,6 @@ class GenericDataLoader:
       batch_size=self.params['eval_batch_size'],
       num_workers=self.params['num_workers'],
       shuffle=False,
-      drop_last=drop_last,
       pin_memory=True, 
       pin_memory_device=pin_memory_device)
   
