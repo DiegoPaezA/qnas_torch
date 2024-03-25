@@ -310,6 +310,10 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
                 return_val[0] = results_dict['median_eval_accuracy']
                 return_val[1] = results_dict['model_memory_usage']
                 return_val[2] = results_dict['cuda_inference_time']
+            elif params['fitness_metric'] == 'scalar_multi_objective':
+                return_val[0] = results_dict['scalar_multi_objective']
+                return_val[1] = results_dict['model_memory_usage']
+                return_val[2] = results_dict['cuda_inference_time']
             else:
                 raise ValueError(f"Invalid fitness metric: {params['fitness_metric']}")
         LOGGER.info(f"Training of model {id_num} finished, best {params['fitness_metric']}: {round(return_val[0], 2)}")
