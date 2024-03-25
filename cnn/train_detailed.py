@@ -235,9 +235,23 @@ def train(model: torch.nn.Module,
     
     create_info_file(params['model_path'], params, 'retraining_params.txt')
     
+        # Measure inference time
+    inference_images = next(iter(test_loader))[0][:10].to(params['device'])
+
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
+        with record_function("model_inference"):
+            best_model_loaded(inference_images)
+
+    model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
+    cpu_inference_time = prof.key_averages()[0].cpu_time
+    cuda_inference_time = prof.key_averages()[0].cuda_time
+    
     total_trainable_params = sum(p.numel() for p in best_model_loaded.parameters() if p.requires_grad)
     
     training_results['total_trainable_params'] = total_trainable_params
+    training_results['cuda_inference_time'] = cuda_inference_time
+    training_results['cpu_inference_time'] = cpu_inference_time
+    training_results['model_memory_usage'] = model_memory_usage
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
     training_results['validation_losses'] = validation_losses
