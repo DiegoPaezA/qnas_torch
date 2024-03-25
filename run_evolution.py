@@ -64,7 +64,8 @@ if __name__ == '__main__':
                         help='Logging information level.')
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['RMSProp', 'Adam', 'AdamW', 'SGD'],
                         help='Optimizer to be used during training. Default = AdamW.')
-    parser.add_argument('--fitness_metric', type=str, default='best_accuracy', choices=['best_accuracy', 'mean_accuracy', 'median_accuracy'],
+    parser.add_argument('--fitness_metric', type=str, default='best_accuracy', 
+                        choices=['best_accuracy', 'mean_accuracy', 'median_accuracy', 'scalar_multi_objective'],
                         help='Fitness metric to be used during evolution. Default = accuracy.')
     parser.add_argument('--data_augmentation', action='store_true',
                     help='Disable data augmentation during training. Default = False.')

@@ -152,7 +152,7 @@ class EvalPopulation(object):
                                         val_loader, 
                                         return_val)
             self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with "
-                             f"Accuracy: {round(return_val[0], 4)}, Memory Consumption: {round(return_val[1], 4)} MB, "
-                             f"Inference Time: {round(return_val[2], 4)} uS")
+                             f"Best Metric: {round(return_val[0], 3)}, Memory Consumption: {round(return_val[1], 3)} MB, "
+                             f"Inference Time: {round(return_val[2], 3)} uS")
             
 
