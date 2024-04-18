@@ -2,7 +2,7 @@
 
 QNAS:
     crossover_rate: 0.5
-    max_generations: 5
+    max_generations: 100
     max_num_nodes: 20
     num_quantum_ind: 4
     penalize_number: 3
