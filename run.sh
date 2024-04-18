@@ -6,7 +6,7 @@ echo "Running evolution experiment with config2.txt"
 dataset="organamnist"
 exp_path_base="experiments_${dataset}_mob"
 config_file="config_files_med"
-fitness_metric="scalar_multi_objective"
+fitness_metric="scalar_multi_objective" # 'best_accuracy', 'mean_accuracy', 'median_accuracy', 'scalar_multi_objective'
 
 for ((i=1; i<=3; i++)); do
     exp_path="${exp_path_base}/exp2_repeat_$i"
