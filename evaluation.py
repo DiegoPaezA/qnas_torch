@@ -131,7 +131,7 @@ class EvalPopulation(object):
             p.join()
                     
         for idx, val in enumerate(variables):
-            evaluations[idx] = val[0] # Accuracy
+            evaluations[idx] = val[0] # Accuracy - Best Metric
             #evaluations[idx] = val.value
             
         evol_end = time.perf_counter()
