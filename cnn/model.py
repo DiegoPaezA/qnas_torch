@@ -345,6 +345,52 @@ class DepthConvBlock(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
             
         return tensor
+
+class SEDepthConvBlock(nn.Module):
+    """
+    Squeeze-and-Excitation Depthwise Separable Convolution Block.
+    """
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
+        """
+        Initializes the Squeeze-and-Excitation Depthwise Separable Convolution block.
+
+        Args:
+            in_channel : int
+                Represents the number of channels in the input image (default 3 for RGB)
+            kernel : int
+                Represents the size of the convolutional window (3 means [3,3])
+            filters : int
+                Number of filters
+            strides : int
+                Represents the stride of the convolutional window (3 means [3,3])
+            mu : float
+                Mean for the batch normalization
+            epsilon : float
+                Epsilon for the batch normalization
+            reduction_ratio : int, optional 
+                Reduction ratio for the SE block. Default is 16.
+        """
+        super(SEDepthConvBlock, self).__init__()
+        
+        self.depth_conv_block = DepthConvBlock(kernel,in_channels,filters,strides,mu,epsilon,channels_last)
+        self.se_block = SEBlock(filters, reduction_ratio=reduction_ratio) # in_channels = output size of depth_conv_block (filters)
+
+    def forward(self, x):
+        """
+        Forward pass through the Squeeze-and-Excitation Depthwise Separable Convolution block.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output tensor after applying the Squeeze-and-Excitation Depthwise Separable Convolution block.
+        """
+        x = self.depth_conv_block(x)
+
+        # Apply SE block for channel-wise attention
+        x = self.se_block(x)
+
+        return x
     
 class ResidualV1(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
@@ -729,6 +775,9 @@ class NoOp(nn.Module):
 functions_dict = {'ConvBlock': ConvBlock,
                   'DepthConvBlock': DepthConvBlock,
                   'SEConvBlock': SEConvBlock,
+                  'SEDepthConvBlock': SEDepthConvBlock,
+                  'ResidualV1': ResidualV1,
+                  'ResidualV1Pr': ResidualV1Pr,
                   'CBAMConvBlock': CBAMConvBlock,
                   'ResidualV1CBAM': ResidualV1CBAM,
                   'CBAMBlock' : CBAMBlock,
@@ -806,7 +855,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMConvBlock', 'ResidualV1CBAM']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMConvBlock', 'ResidualV1CBAM','SEDepthConvBlock','ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
