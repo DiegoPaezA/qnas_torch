@@ -98,6 +98,10 @@ def train_epoch(model, criterion, optimizer, data_loader, params):
             
         loss = criterion(y_logits, labels)
         loss.backward()
+        
+        # Apply gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
         train_loss += loss.item()
         _, predicted = y_logits.max(1)
@@ -337,8 +341,11 @@ def train_and_eval(params: Dict[str, Any],
         optimizer = torch.optim.Adam(model_net.parameters())
     elif params['optimizer'] == 'AdamW':
         optimizer = torch.optim.AdamW(model_net.parameters())
-    else:
+    elif params['optimizer'] == 'SGD':
         optimizer = torch.optim.SGD(model_net.parameters(), lr=params['learning_rate'])
+    else:
+        raise ValueError(f"Invalid optimizer: {params['optimizer']}")
+        
 
     # Training time start counting here.
     params['t0'] = time.time()
