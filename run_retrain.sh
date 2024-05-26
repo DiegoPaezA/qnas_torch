@@ -1,23 +1,36 @@
 #!/bin/bash
-# Define variables for organamnist and exp8
+
+
+# Define variables for retrain experiment
 dataset="cifar10"
-exp="exp17"
+exp="exp3"
+repeat="3"
 
-echo "Starting $exp F10 repeat 1"
-exp_path="retrain_cifar10_base_2/exp17_adamw_repeat_1"
+echo "Starting $exp F13 repeat $repeat"
+exp_path="experiments_${dataset}_v2/${exp}_repeat_${repeat}"
 
-CUDA_VISIBLE_DEVICES=0 python retrain_model.py \
+# Retrain model
+CUDA_VISIBLE_DEVICES=2 python retrain_model.py \
     --experiment_path "$exp_path" \
     --data_path "${dataset}_data" \
     --dataset "$dataset" \
     --retrain_folder retrain \
-    --config_code F10 \
+    --config_code F13 \
     --log_level INFO \
-    --max_epochs 100 \
-    --batch_size 128 \
-    --eval_batch_size 128 \
+    --max_epochs 300 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
     --device cuda:0 \
-    --num_repetitions 3 \
+    --num_repetitions 1 \
     --lr_scheduler "multistep" \
     --data_augmentation \
-    --optimizer "AdamW" 
+    --optimizer "AdamW"
+
+
+# Check if the previous command was successful
+if [ $? -ne 0 ]; then
+    echo "Error: Retrain model script failed."
+    exit 1
+fi
+
+echo "Retrain model script completed successfully."
