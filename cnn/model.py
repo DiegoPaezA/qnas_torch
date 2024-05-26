@@ -561,11 +561,11 @@ class ResidualV1CBAM(nn.Module):
     
 class ResidualV1Pr(nn.Module):
     """ Residual V1 block with projection shortcut """
-    def __init__(self, in_channel=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
         """ Initialize ResidualV1.
 
         Args:
-            in_channel : int
+            in_channels : int
                 Represents the number of channels in the input image (default 3 for RGB)
             kernel : int
                 Represents the size of the convolutional window (3 means [3,3])
@@ -587,7 +587,7 @@ class ResidualV1Pr(nn.Module):
         self.channels_last = channels_last
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
-        self.conv1 = nn.Conv2d(in_channels=in_channel, out_channels=filters, 
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
                               kernel_size=self.kernel_size,stride=strides, 
                               padding= self.padding ,bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
@@ -602,10 +602,10 @@ class ResidualV1Pr(nn.Module):
         init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
         
         # Shortcut connection
-        if strides != 1 or in_channel != filters:
+        if strides != 1 or in_channels != filters:
             #print("Shortcut connection")
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channel, filters, kernel_size=1, padding=0,stride=strides, bias=False),
+                nn.Conv2d(in_channels, filters, kernel_size=1, padding=0,stride=strides, bias=False),
                 nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
                                          eps=self.batch_norm_epsilon)
             )
