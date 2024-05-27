@@ -18,8 +18,7 @@ QNAS:
         momentum: 0.0
         weight_decay: 1.0e-4
 
-    function_dict:  {
-                     'bv1_3_1_64':  {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/6.0},
+    function_dict:  {'bv1_3_1_64':  {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/6.0},
                      'bv1_3_1_128': {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/6.0},
                      'bv1_3_1_256': {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/6.0},
                      'bv1p_3_1_64':  {'function': 'ResidualV1Pr', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/6.0},
