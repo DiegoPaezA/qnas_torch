@@ -393,24 +393,7 @@ class SEDepthConvBlock(nn.Module):
         return x
     
 class ResidualV1(nn.Module):
-    """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> Add -> ReLU """
     def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
-        """ Initialize ResidualV1.
-
-        Args:
-            in_channel : int
-                Represents the number of channels in the input image (default 3 for RGB)
-            kernel : int
-                Represents the size of the convolutional window (3 means [3,3])
-            filters : int
-                Number of filters
-            strides : int
-                Represents the stride of the convolutional window (3 means [3,3])
-            mu : float
-                Mean for the batch normalization
-            epsilon : float
-                Epsilon for the batch normalization
-        """
         super().__init__()
         self.kernel_size = kernel
         self.filters = filters
@@ -421,32 +404,31 @@ class ResidualV1(nn.Module):
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
+                               kernel_size=self.kernel_size,stride=strides, 
+                               padding=self.padding, bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+                                  eps=self.batch_norm_epsilon)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+                               kernel_size=self.kernel_size, stride=1, 
+                               padding=self.padding, bias=False)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
+                                  eps=self.batch_norm_epsilon)
         
-        init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
-        init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
+        self.projection = nn.Sequential(
+            nn.Conv2d(in_channels, filters, kernel_size=1, padding=0, stride=strides, bias=False),
+            nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, eps=self.batch_norm_epsilon)
+        ) if strides != 1 or in_channels != filters else nn.Identity()
         
+        init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')
+        init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')
+        if not isinstance(self.projection, nn.Identity):
+            init.kaiming_normal_(self.projection[0].weight, mode='fan_out', nonlinearity='relu')
 
     def forward(self, inputs):
-        """ Residual block with convolution op + batch normalization op + add op.
-
-        Args:
-            inputs: input tensor to the
-        Returns:
-            output tensor.
-        """
         if self.channels_last:
             inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
         
-        #print(f'inputs.shape: {inputs.shape}')            
+        #print(f'inputs.shape V1: {inputs.shape}')            
         tensor = self.conv1(inputs)
         tensor = self.bn1(tensor)
         tensor = F.relu(tensor)
@@ -456,21 +438,14 @@ class ResidualV1(nn.Module):
         tensor = self.bn2(tensor)
               
         #print(f'tensor.shape Layer 2: {tensor.shape}')
-        #print(f'inputs.shape before pad: {inputs.shape}')
-        
-        inputs, tensor = pad_features([inputs, tensor], channels_last=False)
-        
-        #print(f'inputs.shape after pad: {inputs.shape}')
-        #print(f'tensor.shape Pad: {tensor.shape}')
-        
-        
-        tensor = tensor + inputs
-        
+              
+        tensor += self.projection(inputs)
         tensor = F.relu(tensor)
         
         if self.channels_last:
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
-
+        
+        #print(f'output.shape: {tensor.shape}')
         return tensor
 
 class ResidualV1CBAM(nn.Module):
@@ -799,9 +774,9 @@ def pad_features(tensors, channels_last=False):
     channel_axis = - 1 if channels_last else 1
     
     if shapes[0][channel_axis] < shapes[1][channel_axis]:
-        small_ch_id, large_ch_id = (0, 1)
+        small_ch_id, large_ch_id = 0, 1
     else:
-        small_ch_id, large_ch_id = (1, 0)
+        small_ch_id, large_ch_id = 1, 0
     
     pad = shapes[large_ch_id][channel_axis] - shapes[small_ch_id][channel_axis]
     pad_beg = pad // 2
