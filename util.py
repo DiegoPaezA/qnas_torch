@@ -153,11 +153,12 @@ def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=Fals
     """
     num_keys = len(results_dict.keys())
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
-    keys = list(results_dict.keys())
-    total_epochs = len(results_dict[keys[0]]['training_losses'])
-    epochs = range(1, total_epochs + 1)
+
     if retrain:
         if num_keys > 1:
+            keys = list(results_dict.keys())
+            total_epochs = len(results_dict[keys[0]]['training_losses'])
+            epochs = range(1, total_epochs + 1)
             test_acc_mean = np.mean([results_dict[key]['test_accuracy'] for key in results_dict.keys()])
             test_acc_std = np.std([results_dict[key]['test_accuracy'] for key in results_dict.keys()])
             agg_results_dict = agg_results(results_dict)
@@ -224,9 +225,9 @@ def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=Fals
             ax[1].legend()
             ax[1].grid(True)
     else:
-        
+        epochs = range(1, len(results_dict['training_losses']) + 1)
         eval_starts = params["max_epochs"] - params["epochs_to_eval"]
-        epochs_val = range(eval_starts+1, total_epochs+1)
+        epochs_val = range(eval_starts+1, max(epochs)+1)
     
         ax[0].plot(epochs, results_dict["training_losses"], 'b', label='Training loss')
         ax[0].plot(epochs_val, results_dict["validation_losses"], 'r', label='Validation loss')
