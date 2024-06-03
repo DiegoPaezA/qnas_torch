@@ -9,9 +9,9 @@ data_path="${dataset}_data"
 log_level="INFO"
 
 # Array of configurations
-configs=("config5.txt" "config6.txt")
-exps=("exp5" "exp6")
-cuda_devices=("0,1" "0,1")
+configs=("config6.txt")
+exps=("exp6")
+cuda_devices=("0,1")
 
 # Loop over the length of the configs array
 for ((j=0; j<${#configs[@]}; j++)); do
@@ -21,7 +21,7 @@ for ((j=0; j<${#configs[@]}; j++)); do
     
     echo "Running evolution experiment with $config"
 
-    for ((i=1; i<=3; i++)); do
+    for ((i=1; i<=3; i++)); do # Change the range to the number of repeats
         exp_path="${exp_path_base}/${exp}_repeat_$i"
         
         CUDA_VISIBLE_DEVICES="$cuda_device" python run_evolution.py \

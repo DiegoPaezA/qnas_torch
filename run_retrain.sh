@@ -1,10 +1,9 @@
 #!/bin/bash
 
-
 # Define variables for retrain experiment
 dataset="cifar10"
-exp="exp3"
-repeat="3"
+exp="exp6"
+repeat="1"
 
 echo "Starting $exp F13 repeat $repeat"
 exp_path="experiments_${dataset}_v2/${exp}_repeat_${repeat}"
