@@ -12,7 +12,7 @@ import numpy as np
 import time
 
 from population import QPopulationNetwork, QPopulationParams
-from util import delete_old_dirs, init_log, load_pkl
+from util import delete_old_dirs, init_log, load_pkl, calculate_time
 
 
 class QNAS(object):
@@ -407,7 +407,7 @@ class QNAS(object):
     #         output_dir = os.path.join(self.experiment_path, 'csv_data')
     #         extractor = ExtractData(input_dir=input_dir, output_dir=output_dir)
     #         extractor.extract()
-
+    
     def go_next_gen(self):
         """ Go to the next generation --> update quantum genes, log data, delete unnecessary
             training files and update generation counter.
@@ -436,11 +436,16 @@ class QNAS(object):
             self.current_gen += 1
 
         while self.current_gen < max_generations:
+            # Estimate time to finish the evolution
+            if self.current_gen % 5 == 0 and self.current_gen > 0:
+                int_time = time.time()
+                int_hours, int_mins, est_hours, est_mins = calculate_time(start_evolution,int_time,self.current_gen, max_generations, end_evol=False)
+                self.logger.info(f"Current evolution time at generation {self.current_gen}: {int_hours} hours and {int_mins} mins")
+                self.logger.info(f"Estimated time to finish the evolution: {est_hours} hours and {est_mins} mins")
+                
             self.generate_classical()
             self.go_next_gen()
         
         end_evolution = time.time()
-        total_evolution_time = end_evolution - start_evolution
-        evolution_hours = int(total_evolution_time / 3600)
-        evolution_minutes = int((total_evolution_time - evolution_hours * 3600) / 60)
+        evolution_hours, evolution_minutes = calculate_time(start_evolution,end_evolution)
         self.logger.info(f"Total evolution time: {evolution_hours} hours and {evolution_minutes} minutes")

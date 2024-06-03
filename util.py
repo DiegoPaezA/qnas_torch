@@ -4,13 +4,12 @@ import pickle as pkl
 import os
 import re
 import json
+import time
 import matplotlib.pyplot as plt
 from shutil import rmtree
 import numpy as np
 import seaborn as sns
 import pandas as pd
-
-
 
 
 def natural_key(string):
@@ -370,3 +369,33 @@ def load_evolved_data(experiment_path: str):
                 individual = int(matches.group(2))
 
         return {'net': net_list, 'generation': generation, 'individual': individual, 'best_accuracy': best_acc}
+    
+def calculate_time(start_time, elapse_time,current_gen:int=0, max_generations:int=300, end_evol = True):
+    """
+    Calculate the elapsed time and the estimated remaining time in the evolution process.
+
+    Parameters:
+    start_time (int): The start time of the evolution process.
+    elapse_time (int): The current time in the evolution process.
+    current_gen (int): The current generation number. Default is 0.
+    max_generations (int): The maximum number of generations. Default is 300.
+    end_evol (bool): If True, only calculate the elapsed time. If False, also calculate the estimated remaining time. Default is True.
+
+    Returns:
+    tuple: If end_evol is True, returns a tuple (hours, minutes) representing the elapsed time.
+           If end_evol is False, returns a tuple (hours, minutes, remaining_total_hours, remaining_total_minutes) representing the elapsed time and the estimated remaining time.
+    """
+    
+    total_time = elapse_time - start_time
+    hours = int(total_time / 3600)
+    minutes = int((total_time - hours * 3600) / 60)
+    
+    if end_evol:
+        return hours, minutes
+    else:
+        avg_time_per_gen = total_time / current_gen if current_gen != 0 else 0
+        remaining_total_time = avg_time_per_gen * (max_generations - current_gen)
+        remaining_total_hours = int(remaining_total_time / 3600)
+        remaining_total_minutes = int((remaining_total_time - remaining_total_hours * 3600) / 60)
+        
+        return hours, minutes, remaining_total_hours, remaining_total_minutes
