@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
+from torchvision.ops import DeformConv2d
 
 class ChannelAttention(nn.Module):
     """
@@ -201,6 +202,74 @@ class ConvBlock(nn.Module):
         #print(f'ConvBlock input.shape: {inputs.shape}')
         tensor = self.conv(inputs)
         #print(f'layer1 output.shape: {tensor.shape}')
+        tensor = self.batch_norm(tensor)
+        tensor = self.activation(tensor)
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+            
+        return tensor
+
+class DeformableConvBlock(nn.Module):
+    """ Deformable Convolutional Block with DeformConv -> BatchNorm -> ReLU """
+
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+        """ Initialize DeformableConvBlock.
+
+        Args:
+            in_channel : int
+                Represents the number of channels in the input image (default 3 for RGB)
+            kernel : int
+                Represents the size of the convolutional window (3 means [3,3])
+            filters : int
+                Number of filters
+            strides : int
+                Represents the stride of the convolutional window (3 means [3,3])
+            mu : float
+                Mean for the batch normalization
+            epsilon : float
+                Epsilon for the batch normalization
+        """
+        super().__init__()
+        self.kernel_size = kernel
+        self.filters = filters
+        self.strides = strides
+        self.batch_norm_mu = mu
+        self.batch_norm_epsilon = epsilon
+        self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
+        self.activation = nn.ReLU()
+        self.channels_last = channels_last
+        
+        # Deformable convolution
+        self.offsets = nn.Conv2d(in_channels=in_channels, out_channels=2*kernel*kernel, 
+                                 kernel_size=kernel, stride=strides, padding=self.padding)
+        self.deform_conv = DeformConv2d(in_channels=in_channels, out_channels=self.filters, 
+                                        kernel_size=self.kernel_size, stride=self.strides, 
+                                        padding=self.padding)
+        init.kaiming_normal_(self.deform_conv.weight, nonlinearity='relu')
+        
+        self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
+                                         momentum=self.batch_norm_mu, 
+                                         eps=self.batch_norm_epsilon)
+            
+    def forward(self, inputs):
+        """ Deformable convolutional block with deformable convolution op + batch normalization op.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+        
+        # Calculate offsets
+        offsets = self.offsets(inputs)
+        
+        # Apply deformable convolution
+        tensor = self.deform_conv(inputs, offsets)
+        
         tensor = self.batch_norm(tensor)
         tensor = self.activation(tensor)
         
@@ -618,6 +687,53 @@ class ResidualV1Pr(nn.Module):
 
         return tensor
 
+class InvertedResidualBlock(nn.Module):
+    """ Inverted Residual Block with Depthwise Separable Convolution """
+
+    def __init__(self, kernel=3, in_channels=1, filters=1, strides=1,expansion_factor=6, channels_last=False):
+        super(InvertedResidualBlock, self).__init__()
+        self.stride = strides
+        self.use_residual = strides == 1 and in_channels == filters
+        self.channels_last = channels_last
+
+        hidden_dim = in_channels * expansion_factor
+
+        layers = []
+        if expansion_factor != 1:
+            layers.extend([
+                nn.Conv2d(in_channels, hidden_dim, kernel_size=1, stride=1, padding=0, bias=False),
+                nn.BatchNorm2d(hidden_dim),
+                nn.ReLU6(inplace=True)
+            ])        
+        # Depthwise Convolution
+        layers.extend([
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=strides, padding=1, groups=hidden_dim, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            nn.ReLU6(inplace=True)
+        ])
+
+        # Pointwise Convolution for Projection
+        layers.extend([
+            nn.Conv2d(hidden_dim, filters, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(filters),
+        ])
+
+        self.conv = nn.Sequential(*layers)
+
+    def forward(self, x):
+        if self.channels_last:
+            x = x.permute(0, 3, 1, 2)  # Convert NHWC to NCHW format
+
+        if self.use_residual:
+            out = x + self.conv(x)
+        else:
+            out = self.conv(x)
+
+        if self.channels_last:
+            out = out.permute(0, 2, 3, 1)  # Convert NCHW to NHWC format
+
+        return out
+        
 class MaxPooling(nn.Module):
     """ Max Pooling layer """
 
@@ -753,9 +869,11 @@ functions_dict = {'ConvBlock': ConvBlock,
                   'SEDepthConvBlock': SEDepthConvBlock,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
+                  'DefConvBlock': DeformableConvBlock,
                   'CBAMConvBlock': CBAMConvBlock,
                   'ResidualV1CBAM': ResidualV1CBAM,
                   'CBAMBlock' : CBAMBlock,
+                  'InvResidualBlock': InvertedResidualBlock,
                   'MaxPooling': MaxPooling,
                   'AvgPooling': AvgPooling,
                   'FullyConnected': FullyConnected,
@@ -830,7 +948,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMConvBlock', 'ResidualV1CBAM','SEDepthConvBlock','ResidualV1', 'ResidualV1Pr']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMBlock', 'ResidualV1CBAM','SEDepthConvBlock','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
