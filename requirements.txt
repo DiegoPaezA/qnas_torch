@@ -8,3 +8,4 @@ torch == 2.0.1
 torchvision == 0.15.2
 matplotlib==3.8.1
 medmnist == 3.0.1
+fvcore==0.1.5.post20221221
