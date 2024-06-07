@@ -1,4 +1,4 @@
-# Configuration file 5: depthwise separable convolutions
+# Configuration file 10: residualblocks + residual cbam block
 
 QNAS:
     crossover_rate: 0.5
@@ -18,14 +18,12 @@ QNAS:
         momentum: 0.0
         weight_decay: 1.0e-4
 
-    function_dict:  {'dconv_1_1_32':  {'function': 'DepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/8.0},
-                     'dconv_1_1_64':  {'function': 'DepthConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/8.0},
-                     'dconv_3_1_32':  {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/8.0},
-                     'dconv_3_1_64':  {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/8.0},
-                     'dconv_3_1_128': {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/8.0},
-                     'dconv_3_1_256': {'function': 'DepthConvBlock', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/8.0},
-                     'dconv_5_1_32':  {'function': 'DepthConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 32}, 'prob': 1.0/3.0/8.0},
-                     'dconv_5_1_64':  {'function': 'DepthConvBlock', 'params': {'kernel': 5, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/8.0},
+    function_dict:  {'bv1_3_1_64':  {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/6.0},
+                     'bv1_3_1_128': {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/6.0},
+                     'bv1_3_1_256': {'function': 'ResidualV1', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/6.0},
+                     'resv1cbam_3_1_64':  {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 64}, 'prob': 1.0/3.0/6.0},
+                     'resv1cbam_3_1_128': {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 128}, 'prob': 1.0/3.0/6.0},
+                     'resv1cbam_3_1_256': {'function': 'ResidualV1CBAM', 'params': {'kernel': 3, 'strides': 1, 'filters': 256}, 'prob': 1.0/3.0/6.0},
                      'max_pool_2_2': {'function': 'MaxPooling', 'params': {'kernel': 2, 'strides': 2}, 'prob': 1.0/3.0/2.0},
                      'avg_pool_2_2': {'function': 'AvgPooling', 'params': {'kernel': 2, 'strides': 2}, 'prob': 1.0/3.0/2.0},
                      'no_op':        {'function': 'NoOp', 'params': {}, 'prob': 1.0/3.0}}

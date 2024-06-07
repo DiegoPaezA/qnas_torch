@@ -1,4 +1,4 @@
-# Configuration file 2 - group 3 - residual blocks
+# Configuration file 4 - group 3 - residual blocks
 
 QNAS:
     crossover_rate: 0.5
