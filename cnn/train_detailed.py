@@ -16,7 +16,6 @@ from typing import Dict, List, Union, Any
 from sklearn.metrics import confusion_matrix
 from cnn import model, input
 from util import create_info_file, init_log, load_yaml
-from fvcore.nn import FlopCountAnalysis
 from torch.profiler import profile, record_function, ProfilerActivity
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, MultiStepLR
 
@@ -253,15 +252,12 @@ def train(model: torch.nn.Module,
     
     total_trainable_params = sum(p.numel() for p in best_model_loaded.parameters() if p.requires_grad)
     
-    flops_counter = FlopCountAnalysis(model, inference_images)
-    total_flops = flops_counter.total()/len(inference_images) # Average flops per image
     
     
     training_results['total_trainable_params'] = total_trainable_params
     training_results['cuda_inference_time'] = cuda_inference_time
     training_results['cpu_inference_time'] = cpu_inference_time
     training_results['model_memory_usage'] = model_memory_usage
-    training_results['total_flops'] = total_flops
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
     training_results['validation_losses'] = validation_losses

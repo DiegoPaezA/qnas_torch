@@ -22,7 +22,6 @@ from cnn import model, input
 from util import create_info_file, init_log, load_yaml
 from torch.cuda.amp import GradScaler
 from torch.profiler import profile, record_function, ProfilerActivity
-from fvcore.nn import FlopCountAnalysis
 
 
 
@@ -180,8 +179,6 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     total_params = sum(p.numel() for p in model.parameters())
     total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
-    flops_counter = FlopCountAnalysis(model, inference_images)
-    total_flops = flops_counter.total() / len(inference_images) # Average flops per image
     
     # Scalarized multi-objective function
     scalar_multi_objective = params['acc_weight']*best_accuracy - params['params_weight']*(total_trainable_params / MAX_PARAMS) - params['time_weight']*(cuda_inference_time / MAX_INFER_TIME)
@@ -191,7 +188,6 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     params['cuda_inference_time'] = cuda_inference_time
     params['cpu_inference_time'] = cpu_inference_time
     params['model_memory_usage'] = model_memory_usage
-    params['total_flops'] = total_flops
     params['best_accuracy'] = best_accuracy
     params['mean_eval_accuracy'] = mean_eval_accuracy
     params['median_eval_accuracy'] = median_eval_accuracy
@@ -210,7 +206,6 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['cuda_inference_time'] = cuda_inference_time # in microseconds
     training_results['model_memory_usage'] = model_memory_usage # in MB
     training_results['total_trainable_params'] = total_trainable_params
-    training_results['total_flops'] = total_flops
     training_results['best_accuracy'] = best_accuracy
     training_results['mean_eval_accuracy'] = mean_eval_accuracy
     training_results['median_eval_accuracy'] = median_eval_accuracy
@@ -270,7 +265,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     has_cbam_key = any(key.startswith("cbam") for key in fn_dict)
     
     # Create the model
-    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)    
+    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"])    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list, cbam=has_cbam_key)
     
