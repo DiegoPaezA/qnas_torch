@@ -184,9 +184,7 @@ class ConvBlock(nn.Module):
                             stride=self.strides, 
                             padding= self.padding)
         init.kaiming_normal_(self.conv.weight,nonlinearity='relu')
-        self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
-                                         momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.batch_norm = nn.BatchNorm2d(num_features=self.filters)
             
     def forward(self, inputs):
         """ Convolutional block with convolution op + batch normalization op.
@@ -210,7 +208,7 @@ class ConvBlock(nn.Module):
             
         return tensor
 
-class DeformableConvBlock(nn.Module):
+class DefConvBlock(nn.Module):
     """ Deformable Convolutional Block with DeformConv -> BatchNorm -> ReLU """
 
     def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
@@ -248,9 +246,7 @@ class DeformableConvBlock(nn.Module):
                                         padding=self.padding)
         init.kaiming_normal_(self.deform_conv.weight, nonlinearity='relu')
         
-        self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
-                                         momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.batch_norm = nn.BatchNorm2d(num_features=self.filters)
             
     def forward(self, inputs):
         """ Deformable convolutional block with deformable convolution op + batch normalization op.
@@ -388,9 +384,7 @@ class DepthConvBlock(nn.Module):
         init.kaiming_normal_(self.depthwise_conv.weight,nonlinearity='relu')
         init.kaiming_normal_(self.pointwise_conv.weight,nonlinearity='relu')
 
-        self.batch_norm = nn.BatchNorm2d(num_features=self.filters,
-                                         momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.batch_norm = nn.BatchNorm2d(num_features=self.filters)
             
     def forward(self, inputs):
         """ Depthwise Separable Convolutional block with depthwise convolution + pointwise convolution
@@ -475,17 +469,15 @@ class ResidualV1(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
                                kernel_size=self.kernel_size,stride=strides, 
                                padding=self.padding, bias=False)
-        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
-                                  eps=self.batch_norm_epsilon)
+        self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
                                kernel_size=self.kernel_size, stride=1, 
                                padding=self.padding, bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
-                                  eps=self.batch_norm_epsilon)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
         self.projection = nn.Sequential(
             nn.Conv2d(in_channels, filters, kernel_size=1, padding=0, stride=strides, bias=False),
-            nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, eps=self.batch_norm_epsilon)
+            nn.BatchNorm2d(num_features=self.filters)
         ) if strides != 1 or in_channels != filters else nn.Identity()
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')
@@ -548,13 +540,11 @@ class ResidualV1CBAM(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
                               kernel_size=self.kernel_size,stride=strides, 
                               padding= self.padding ,bias=False)
-        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
                               kernel_size=self.kernel_size,stride=strides, 
                               padding= self.padding ,bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
         init.kaiming_normal_(self.conv1.weight,nonlinearity='relu')  # He Normal initialization
         init.kaiming_normal_(self.conv2.weight,nonlinearity='relu')  # He Normal initialization
@@ -566,8 +556,7 @@ class ResidualV1CBAM(nn.Module):
             #print("Shortcut connection")
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channels, filters, kernel_size=1, padding=0,stride=strides, bias=False),
-                nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+                nn.BatchNorm2d(num_features=self.filters)
             )
         else:
             self.shortcut = nn.Identity()
@@ -634,13 +623,11 @@ class ResidualV1Pr(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
                               kernel_size=self.kernel_size,stride=strides, 
                               padding= self.padding ,bias=False)
-        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
                               kernel_size=self.kernel_size,stride=strides, 
                               padding= self.padding ,bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
         init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
@@ -650,8 +637,7 @@ class ResidualV1Pr(nn.Module):
             #print("Shortcut connection")
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channels, filters, kernel_size=1, padding=0,stride=strides, bias=False),
-                nn.BatchNorm2d(num_features=self.filters,momentum=self.batch_norm_mu, 
-                                         eps=self.batch_norm_epsilon)
+                nn.BatchNorm2d(num_features=self.filters)
             )
         else:
             self.shortcut = nn.Identity()
@@ -687,11 +673,11 @@ class ResidualV1Pr(nn.Module):
 
         return tensor
 
-class InvertedResidualBlock(nn.Module):
+class InvResidualBlock(nn.Module):
     """ Inverted Residual Block with Depthwise Separable Convolution """
 
-    def __init__(self, kernel=3, in_channels=1, filters=1, strides=1,expansion_factor=6, channels_last=False):
-        super(InvertedResidualBlock, self).__init__()
+    def __init__(self, kernel=3, in_channels=1, filters=1, strides=1,expansion_factor=6, mu=1, epsilon=1, channels_last=False):
+        super(InvResidualBlock, self).__init__()
         self.stride = strides
         self.use_residual = strides == 1 and in_channels == filters
         self.channels_last = channels_last
@@ -869,11 +855,11 @@ functions_dict = {'ConvBlock': ConvBlock,
                   'SEDepthConvBlock': SEDepthConvBlock,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
-                  'DefConvBlock': DeformableConvBlock,
+                  'DefConvBlock': DefConvBlock,
                   'CBAMConvBlock': CBAMConvBlock,
                   'ResidualV1CBAM': ResidualV1CBAM,
                   'CBAMBlock' : CBAMBlock,
-                  'InvResidualBlock': InvertedResidualBlock,
+                  'InvResidualBlock': InvResidualBlock,
                   'MaxPooling': MaxPooling,
                   'AvgPooling': AvgPooling,
                   'FullyConnected': FullyConnected,
