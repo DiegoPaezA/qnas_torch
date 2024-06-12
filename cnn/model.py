@@ -435,7 +435,6 @@ class MBConv(nn.Module):
         self.project_bn = nn.BatchNorm2d(filters)
         
         self.use_residual = (in_channels == filters and strides == 1)
-        self.use_concat_residual = (in_channels != filters)
 
     def forward(self, x):
         identity = x
@@ -459,8 +458,6 @@ class MBConv(nn.Module):
 
         if self.use_residual:
             out = out + identity
-        elif self.use_concat_residual:
-            out = torch.cat([out, identity], dim=1)
 
         return out
     
