@@ -409,51 +409,60 @@ class DepthConvBlock(nn.Module):
             
         return tensor
 
-class SEDepthConvBlock(nn.Module):
+class MBConv(nn.Module):
     """
-    Squeeze-and-Excitation Depthwise Separable Convolution Block.
+    MobileNetV2 Bottleneck Block with Squeeze-and-Excitation (SE) Block.
     """
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
-        """
-        Initializes the Squeeze-and-Excitation Depthwise Separable Convolution block.
+    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
+        super(MBConv, self).__init__()
+        mid_channels = in_channels * expand_ratio
 
-        Args:
-            in_channel : int
-                Represents the number of channels in the input image (default 3 for RGB)
-            kernel : int
-                Represents the size of the convolutional window (3 means [3,3])
-            filters : int
-                Number of filters
-            strides : int
-                Represents the stride of the convolutional window (3 means [3,3])
-            mu : float
-                Mean for the batch normalization
-            epsilon : float
-                Epsilon for the batch normalization
-            reduction_ratio : int, optional 
-                Reduction ratio for the SE block. Default is 16.
-        """
-        super(SEDepthConvBlock, self).__init__()
+        # Expand
+        self.expand_conv = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.expand_bn = nn.BatchNorm2d(mid_channels)
+        self.expand_relu = nn.ReLU(inplace=True)
+
+        # Depthwise
+        self.depthwise_conv = nn.Conv2d(mid_channels, mid_channels, kernel_size=kernel, stride=strides, padding=(kernel - 1) // 2, groups=mid_channels, bias=False)
+        self.depthwise_bn = nn.BatchNorm2d(mid_channels)
+        self.depthwise_relu = nn.ReLU(inplace=True)
+
+        # Squeeze-and-Excitation
+        self.se_block = SEBlock(mid_channels, reduction_ratio)
+
+        # Project
+        self.project_conv = nn.Conv2d(mid_channels, filters, kernel_size=1, bias=False)
+        self.project_bn = nn.BatchNorm2d(filters)
         
-        self.depth_conv_block = DepthConvBlock(kernel,in_channels,filters,strides,mu,epsilon,channels_last)
-        self.se_block = SEBlock(filters, reduction_ratio=reduction_ratio) # in_channels = output size of depth_conv_block (filters)
+        self.use_residual = (in_channels == filters and strides == 1)
+        self.use_concat_residual = (in_channels != filters)
 
     def forward(self, x):
-        """
-        Forward pass through the Squeeze-and-Excitation Depthwise Separable Convolution block.
+        identity = x
 
-        Args:
-            x (torch.Tensor): Input tensor.
+        # Expand
+        out = self.expand_conv(x)
+        out = self.expand_bn(out)
+        out = self.expand_relu(out)
 
-        Returns:
-            torch.Tensor: Output tensor after applying the Squeeze-and-Excitation Depthwise Separable Convolution block.
-        """
-        x = self.depth_conv_block(x)
+        # Depthwise
+        out = self.depthwise_conv(out)
+        out = self.depthwise_bn(out)
+        out = self.depthwise_relu(out)
 
-        # Apply SE block for channel-wise attention
-        x = self.se_block(x)
+        # Squeeze-and-Excitation
+        out = self.se_block(out)
 
-        return x
+        # Project
+        out = self.project_conv(out)
+        out = self.project_bn(out)
+
+        if self.use_residual:
+            out = out + identity
+        elif self.use_concat_residual:
+            out = torch.cat([out, identity], dim=1)
+
+        return out
     
 class ResidualV1(nn.Module):
     def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
@@ -852,7 +861,7 @@ class NoOp(nn.Module):
 functions_dict = {'ConvBlock': ConvBlock,
                   'DepthConvBlock': DepthConvBlock,
                   'SEConvBlock': SEConvBlock,
-                  'SEDepthConvBlock': SEDepthConvBlock,
+                  'MBConv': MBConv,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
                   'DefConvBlock': DefConvBlock,
@@ -934,7 +943,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMBlock', 'ResidualV1CBAM','SEDepthConvBlock','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
+            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
