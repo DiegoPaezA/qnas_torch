@@ -2,7 +2,7 @@
 
 # Define variables for retrain experiment
 dataset="cifar10"
-exp="exp6"
+exp="exp10"
 repeat="1"
 
 echo "Starting $exp F13 repeat $repeat"

@@ -9,9 +9,13 @@ data_path="${dataset}_data"
 log_level="INFO"
 
 # Array of configurations
-configs=("config6.txt")
-exps=("exp6")
-cuda_devices=("0,1")
+# configs=("config10.txt" "config11.txt")
+# exps=("exp10" "exp11")
+# cuda_devices=("0,1,2" "0,1,2")
+
+configs=("config10.txt")
+exps=("exp10")
+cuda_devices=("0,1,2")
 
 # Loop over the length of the configs array
 for ((j=0; j<${#configs[@]}; j++)); do
