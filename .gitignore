@@ -119,3 +119,6 @@ tissuemnist_data/
 
 # Results
 exp*/
+
+# old files
+x_files/*
