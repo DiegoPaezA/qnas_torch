@@ -346,7 +346,7 @@ class CBAMConvBlock(nn.Module):
         ##print(f'layer2 output.shape: {x.shape}')
         return x
 
-class DepthConvBlock(nn.Module):
+class DWConvBlock(nn.Module):
     """ Depth Wise Separable Convolutional Block with Conv -> DepthwiseConv -> BatchNorm -> ReLU """
 
     def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
@@ -856,7 +856,7 @@ class NoOp(nn.Module):
     pass
 
 functions_dict = {'ConvBlock': ConvBlock,
-                  'DepthConvBlock': DepthConvBlock,
+                  'DWConvBlock': DWConvBlock,
                   'SEConvBlock': SEConvBlock,
                   'MBConv': MBConv,
                   'ResidualV1': ResidualV1,
@@ -940,7 +940,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DepthConvBlock', 'SEConvBlock', 'CBAMBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
+            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'CBAMBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
