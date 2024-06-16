@@ -420,12 +420,12 @@ class MBConv(nn.Module):
         # Expand
         self.expand_conv = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
         self.expand_bn = nn.BatchNorm2d(mid_channels)
-        self.expand_relu = nn.ReLU(inplace=True)
+        self.expand_relu = nn.ReLU6(inplace=True)
 
         # Depthwise
         self.depthwise_conv = nn.Conv2d(mid_channels, mid_channels, kernel_size=kernel, stride=strides, padding=(kernel - 1) // 2, groups=mid_channels, bias=False)
         self.depthwise_bn = nn.BatchNorm2d(mid_channels)
-        self.depthwise_relu = nn.ReLU(inplace=True)
+        self.depthwise_relu = nn.ReLU6(inplace=True)
 
         # Squeeze-and-Excitation
         self.se_block = SEBlock(mid_channels, reduction_ratio)
