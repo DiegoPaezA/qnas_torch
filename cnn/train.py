@@ -37,6 +37,33 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'train.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
+def mofitness(acc:float, params:int, inference_time:int, T_p: int, T_t: int) -> float:
+    """
+    Scalarized multi-objective fitness function.
+
+    :param acc: Classification accuracy of the architecture
+    :param params: Number of parameters of the architecture
+    :param inference_time: Inference time of the architecture
+    :param T_p: Maximum allowable number of parameters
+    :param T_t: Maximum allowable inference time
+    :return: Fitness value
+    """
+    
+    # Determine weights based on parameters and inference time
+    if params <= T_p:
+        w_p = -0.01
+    else:
+        w_p = -1
+
+    if inference_time <= T_t:
+        w_t = -0.01
+    else:
+        w_t = -1
+
+    # Calculate the fitness function
+    fitness_value = (acc) * (params / T_p) ** w_p * (inference_time / T_t) ** w_t
+
+    return fitness_value
 
 
 def train_epoch(model, criterion, optimizer, data_loader, params, scaler):
