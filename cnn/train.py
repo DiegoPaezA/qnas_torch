@@ -48,7 +48,8 @@ def mofitness(acc:float, params:int, inference_time:int, T_p: int, T_t: int) -> 
     :param T_t: Maximum allowable inference time
     :return: Fitness value
     """
-    
+    acc_in_range = 0 <= acc <= 1
+    acc = acc if acc_in_range else acc / 100.0
     # Determine weights based on parameters and inference time
     if params <= T_p:
         w_p = -0.01
@@ -62,6 +63,7 @@ def mofitness(acc:float, params:int, inference_time:int, T_p: int, T_t: int) -> 
 
     # Calculate the fitness function
     fitness_value = (acc) * (params / T_p) ** w_p * (inference_time / T_t) ** w_t
+    fitness_value = fitness_value if acc_in_range else fitness_value * 100.0
 
     return fitness_value
 
@@ -178,7 +180,6 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                scaled_accuracy = best_accuracy / 100.0
                 create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
             if debug:
                 if epoch % 1 == 0:
