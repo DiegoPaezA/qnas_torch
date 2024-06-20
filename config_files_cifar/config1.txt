@@ -55,5 +55,5 @@ train:
     threads: 0
 
     # penalization parameters - scalarized fitness
-    max_params = 1.9e6
-    max_inference_time = 0.7
+    max_params: 1900000 # 1.9M
+    max_inference_time: 700 # us
