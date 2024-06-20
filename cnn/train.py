@@ -37,7 +37,7 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'train.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
-def mofitness(acc:float, params:int, inference_time:int, T_p: int, T_t: int) -> float:
+def mofitness(acc, params, inference_time, T_p, T_t) -> float:
     """
     Scalarized multi-objective fitness function.
 
@@ -153,6 +153,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     validation_losses = []
     validation_accuracies = []
     best_accuracy = 0.0
+    best_validation_loss = float('inf')
     mean_eval_accuracy = 0.0
     median_eval_accuracy = 0.0
     
@@ -181,6 +182,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
                 create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
+            if validation_loss < best_validation_loss:
+                best_validation_loss = validation_loss
+                create_info_file(params['model_path'], {'best_validation_loss': best_validation_loss}, 'best_validation_loss.txt')
             if debug:
                 if epoch % 1 == 0:
                     print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
@@ -209,7 +213,8 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     
     
     # Scalarized multi-objective function
-    scalar_multi_objective = params['acc_weight']*best_accuracy - params['params_weight']*(total_trainable_params / MAX_PARAMS) - params['time_weight']*(cuda_inference_time / MAX_INFER_TIME)
+    scalar_multi_objective = mofitness(best_accuracy, total_trainable_params, cuda_inference_time, params['max_params'], params['max_inference_time'])
+    fitness_val_loss = 1 - best_validation_loss
     
     params['total_params'] = total_params
     params['total_trainable_params'] = total_trainable_params
