@@ -68,7 +68,7 @@ class EvalPopulation(object):
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
         self.loader = input.GenericDataLoader(params=self.train_params)
-        #mp.set_start_method('fork')  # fork for linux, spawn for windows
+        #mp.set_start_method('spawn')
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")        
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
