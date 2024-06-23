@@ -940,7 +940,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'CBAMBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
+            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
