@@ -52,7 +52,6 @@ train:
     save_summary_epochs: 0.25
     threads: 0
 
-    # scalarized objective weights
-    acc_weight: 0.8
-    params_weight: 0.1
-    time_weight: 0.1
+    # penalization parameters - scalarized fitness
+    max_params: 6500000 # 6.5M
+    max_inference_time: 7500 # us
