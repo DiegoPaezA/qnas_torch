@@ -68,7 +68,7 @@ class EvalPopulation(object):
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
         self.loader = input.GenericDataLoader(params=self.train_params)
-        #mp.set_start_method('spawn')
+        #mp.set_start_method('spawn') # This is necessary for the multiprocessing to work on Windows
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")        
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
@@ -152,7 +152,7 @@ class EvalPopulation(object):
                                         val_loader, 
                                         return_val)
             self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with "
-                             f"Best Metric: {round(return_val[0], 3)}, Memory Consumption: {round(return_val[1], 3)} MB, "
+                             f"Best Metric: {round(return_val[0], 3)}, Params: {round(return_val[1], 2)}M, "
                              f"Inference Time: {round(return_val[2], 3)} uS")
             
 

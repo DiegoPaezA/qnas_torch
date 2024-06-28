@@ -228,7 +228,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 
     
     LOGGER.info(f"Cuda Inference time: {cuda_inference_time} microseconds")
-    LOGGER.info(f"Model memory usage: {model_memory_usage} MB")
+    LOGGER.info(f"Total trainable parameters: {round(total_trainable_params / 1e6,2)}M")
     
     create_info_file(params['model_path'], params, 'training_params.txt')
     
@@ -238,7 +238,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['validation_accuracies'] = validation_accuracies
     training_results['cuda_inference_time'] = cuda_inference_time # in microseconds
     training_results['model_memory_usage'] = model_memory_usage # in MB
-    training_results['total_trainable_params'] = total_trainable_params
+    training_results['total_trainable_params'] = total_trainable_params / 1e6 # in millions
     training_results['best_accuracy'] = best_accuracy
     training_results['mean_eval_accuracy'] = mean_eval_accuracy
     training_results['median_eval_accuracy'] = median_eval_accuracy
@@ -334,19 +334,19 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
             #return_val.value = results_dict['best_accuracy']
             if params['fitness_metric'] == 'best_accuracy':
                 return_val[0] = results_dict['best_accuracy']
-                return_val[1] = results_dict['model_memory_usage']
+                return_val[1] = results_dict['total_trainable_params']
                 return_val[2] = results_dict['cuda_inference_time']
             elif params['fitness_metric'] == 'mean_accuracy':
                 return_val[0] = results_dict['mean_eval_accuracy']
-                return_val[1] = results_dict['model_memory_usage']
+                return_val[1] = results_dict['total_trainable_params']
                 return_val[2] = results_dict['cuda_inference_time']
             elif params['fitness_metric'] == 'median_accuracy':
                 return_val[0] = results_dict['median_eval_accuracy']
-                return_val[1] = results_dict['model_memory_usage']
+                return_val[1] = results_dict['total_trainable_params']
                 return_val[2] = results_dict['cuda_inference_time']
             elif params['fitness_metric'] == 'scalar_multi_objective':
                 return_val[0] = results_dict['scalar_multi_objective']
-                return_val[1] = results_dict['model_memory_usage']
+                return_val[1] = results_dict['total_trainable_params']
                 return_val[2] = results_dict['cuda_inference_time']
             else:
                 raise ValueError(f"Invalid fitness metric: {params['fitness_metric']}")
