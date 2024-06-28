@@ -48,7 +48,7 @@ class QNAS(object):
         self.raw_fitnesses = None
         self.reducing_fns_list = []
         self.replace_method = None
-        self.save_data_freq = np.Inf
+        self.save_data_freq = np.inf
         self.total_eval = 0
 
         self.qpop_params = None
