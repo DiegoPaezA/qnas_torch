@@ -4,7 +4,7 @@ import os
 import qnas
 import qnas_config as cfg
 import evaluation
-from util import check_files, init_log
+from util import check_files, init_log, download_dataset
 
 def main(**args):
     
@@ -30,6 +30,9 @@ def main(**args):
     
     if config.train_spec['mixed_precision']:
         logger.info(f"Using mixed precision training ...")
+        
+    # Download dataset
+    download_dataset(params=config.train_spec)
     
     eval_pop = evaluation.EvalPopulation(params=config.train_spec,
                                                 fn_dict=config.fn_dict,

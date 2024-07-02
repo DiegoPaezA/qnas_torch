@@ -10,7 +10,10 @@ from shutil import rmtree
 import numpy as np
 import seaborn as sns
 import pandas as pd
-
+import torchvision.datasets
+from torchvision.transforms import ToTensor
+import medmnist
+from medmnist import INFO
 
 def natural_key(string):
     """ Key to use with sort() in order to sort string lists in natural order.
@@ -399,3 +402,42 @@ def calculate_time(start_time, elapse_time,current_gen:int=0, max_generations:in
         remaining_total_minutes = int((remaining_total_time - remaining_total_hours * 3600) / 60)
         
         return hours, minutes, remaining_total_hours, remaining_total_minutes
+    
+def download_dataset(params: dict):
+    """
+    Downloads the specified dataset if it is not already available locally.
+
+    Parameters:
+    - params (dict): A dictionary containing the parameters for the dataset.
+      - 'data_path' (str): The path where the dataset should be stored.
+      - 'dataset' (str): The name of the dataset to be downloaded.
+
+    If the dataset directory specified by 'data_path' does not exist, it will be created, 
+    and the dataset will be downloaded. The function supports downloading datasets from 
+    torchvision and MedMNIST. If the dataset already exists, it will print a message and 
+    skip the download.
+
+    Raises:
+    - ValueError: If the dataset is not found in torchvision.datasets or MedMNIST INFO.
+    """
+    data_path = params['data_path']
+    dataset_name = params['dataset'].lower()
+
+    download_status = not os.path.exists(data_path)
+    
+    if download_status:
+        os.makedirs(data_path)
+
+        if hasattr(torchvision.datasets, dataset_name.upper()):
+            dataset_family = "pytorch"
+            dataset_class = getattr(torchvision.datasets, dataset_name.upper())
+            dataset_class(data_path, download=True, transform=ToTensor())
+        elif dataset_name in INFO:
+            dataset_family = "medmnist"
+            general_info = INFO[dataset_name]
+            dataset_class = getattr(medmnist, general_info['python_class'])
+            dataset_class(root=data_path, split='train', download=True, transform=ToTensor(), as_rgb=True)
+        else:
+            raise ValueError(f"Dataset class {dataset_name} not found in torchvision.datasets or available_datasets.")
+    else:
+        print(f"Dataset {dataset_name} already downloaded.")    
