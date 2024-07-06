@@ -56,3 +56,7 @@ train:
     acc_weight: 0.8
     params_weight: 0.1
     time_weight: 0.1
+
+    # penalization parameters - scalarized fitness
+    max_params: 2700000 # 2.7M
+    max_inference_time: 3600 # us

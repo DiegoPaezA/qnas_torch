@@ -1,21 +1,16 @@
 #!/bin/bash
 
 # Define common variables for the evolution experiments
-dataset="cifar10"
+dataset="cifar100"
 exp_path_base="experiments_${dataset}_v2"
 config_file="config_files_cifar"
 fitness_metric="best_accuracy"
 data_path="${dataset}_data"
 log_level="INFO"
 
-# Array of configurations
-# configs=("config10.txt" "config11.txt")
-# exps=("exp10" "exp11")
-# cuda_devices=("0,1,2" "0,1,2")
-
-configs=("config10.txt")
-exps=("exp10")
-cuda_devices=("0,1,2")
+configs=("config3.txt")
+exps=("exp2")
+cuda_devices=("0,1")
 
 # Loop over the length of the configs array
 for ((j=0; j<${#configs[@]}; j++)); do
@@ -25,7 +20,7 @@ for ((j=0; j<${#configs[@]}; j++)); do
     
     echo "Running evolution experiment with $config"
 
-    for ((i=1; i<=3; i++)); do # Change the range to the number of repeats
+    for ((i=2; i<=3; i++)); do # Change the range to the number of repeats
         exp_path="${exp_path_base}/${exp}_repeat_$i"
         
         CUDA_VISIBLE_DEVICES="$cuda_device" python run_evolution.py \
