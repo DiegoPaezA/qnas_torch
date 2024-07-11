@@ -101,19 +101,42 @@ class EvalPopulation(object):
         variables = [mp.Array('f', 3) for _ in range(pop_size)]
         
         # create a list of tuples with the individual, the selected thread, the decoded net, the decoded params and the return value    
-        individual_per_thread = [(idx, idx % pop_size, decoded_nets[idx], decoded_params[idx], variables[idx])
-                         for idx in range(len(variables))]
+        # individual_per_thread = [(idx, idx % pop_size, decoded_nets[idx], decoded_params[idx], variables[idx])
+        #                  for idx in range(len(variables))]
         
-        # for idx, selected_thread, _, _, _ in individual_per_thread:
-        #     self.logger.info(f"Going to start fitness of individual {idx} on thread {selected_thread}")
+        # Temporal solution to distribute the individuals in the threads
+        selected_thread = 0
+        individual_per_thread = []
+        for idx in range(len(variables)):
+            individual_per_thread.append((idx, selected_thread, decoded_nets[idx], decoded_params[idx], variables[idx]))
+            selected_thread += 1
+            if selected_thread >= self.train_params['threads']:
+                selected_thread = selected_thread % self.train_params['threads']
         
-        #train_loader, val_loader = self.loader.get_loader(pin_memory_device=self.gpus[0])
         processes = []
         
         print("\n")
         self.logger.info(f"Starting the Generation {generation} with {pop_size} individuals")
         evol_time_start = time.perf_counter()
-        for idx in range(pop_size):
+        # for idx in range(pop_size):
+        #     individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
+        #     gpu_device = self.gpus[idx%len(self.gpus)]
+        #     train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
+        #     process = mp.Process(target=self.run_individuals, args=(generation,
+        #                                         self.train_params,
+        #                                         self.fn_dict,
+        #                                         train_loader,
+        #                                         val_loader,
+        #                                         individuals_selected_thread,
+        #                                         gpu_device))
+        #     process.start()
+        #     processes.append(process)
+
+        # for p in processes:
+        #     p.join()
+        
+        # Temporal solution to distribute the individuals in the threads
+        for idx in range(self.train_params['threads']):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
             gpu_device = self.gpus[idx%len(self.gpus)]
             train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
