@@ -56,12 +56,7 @@ train:
     # Tensorflow
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
-    threads: 0
-
-    # scalarized objective weights
-    acc_weight: 0.8
-    params_weight: 0.1
-    time_weight: 0.1
+    threads: 14
 
     # penalization parameters - scalarized fitness
     max_params: 15620000 # 15.6M
