@@ -18,7 +18,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from typing import Dict, List, Union, Any
-from cnn import model, input
+from cnn import model, input, metrics
 from util import create_info_file, init_log, load_yaml
 from torch.cuda.amp import GradScaler
 from torch.profiler import profile, record_function, ProfilerActivity
@@ -228,7 +228,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     total_params = sum(p.numel() for p in model.parameters())
     total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
-    
+    if cuda_inference_time == 0:
+        cuda_inference_time = metrics.measure_inference_time(model, inference_images)
+        
     # Scalarized multi-objective function
     scalar_multi_objective = mofitness(best_accuracy, total_trainable_params, cuda_inference_time, params['max_params'], params['max_inference_time'])
     fitness_val_loss = 1 - best_validation_loss
