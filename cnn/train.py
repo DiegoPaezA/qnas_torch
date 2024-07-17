@@ -48,21 +48,38 @@ def mofitness(acc, params, inference_time, T_p, T_t) -> float:
     :param T_t: Maximum allowable inference time
     :return: Fitness value
     """
+    # Asegurarse de que acc está en el rango correcto
     acc_in_range = 0 <= acc <= 1
     acc = acc if acc_in_range else acc / 100.0
-    # Determine weights based on parameters and inference time
+    
+    # Determinar pesos basados en parámetros y tiempo de inferencia
     if params <= T_p:
         w_p = -0.01
     else:
         w_p = -1
-
+    
     if inference_time <= T_t:
         w_t = -0.01
     else:
         w_t = -1
-
-    # Calculate the fitness function
-    fitness_value = (acc) * (params / T_p) ** w_p * (inference_time / T_t) ** w_t
+    
+    # Calcular el valor de fitness, evitando la división por cero
+    params_ratio = params / T_p if T_p != 0 else 0
+    inference_time_ratio = inference_time / T_t if T_t != 0 else 0
+    
+    # Evitar elevar 0.0 a una potencia negativa
+    if params_ratio == 0:
+        params_factor = 0
+    else:
+        params_factor = params_ratio ** w_p
+    
+    if inference_time_ratio == 0:
+        inference_time_factor = 0
+    else:
+        inference_time_factor = inference_time_ratio ** w_t
+    
+    # Calcular el valor de fitness con las correcciones aplicadas
+    fitness_value = acc * params_factor * inference_time_factor
     fitness_value = fitness_value if acc_in_range else fitness_value * 100.0
 
     return fitness_value
