@@ -72,6 +72,8 @@ if __name__ == '__main__':
                         help='Fitness metric to be used during evolution. Default = accuracy.')
     parser.add_argument('--data_augmentation', action='store_true',
                     help='Disable data augmentation during training. Default = False.')
+    parser.add_argument('--early_stopping', action='store_true',
+                    help='Disable data augmentation during training. Default = False.')
     parser.add_argument('--save_checkpoints_epochs', type=int, default=5,
                         help='Number of epochs to save the model. Default = 5.')
 

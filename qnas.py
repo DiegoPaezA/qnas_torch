@@ -50,6 +50,7 @@ class QNAS(object):
         self.replace_method = None
         self.save_data_freq = np.inf
         self.total_eval = 0
+        self.early_stopping_counter = 0
 
         self.qpop_params = None
         self.qpop_net = None
@@ -57,7 +58,7 @@ class QNAS(object):
     def initialize_qnas(self, num_quantum_ind, params_ranges, repetition, max_generations,
                         crossover_rate, update_quantum_gen, replace_method, fn_list,
                         initial_probs, update_quantum_rate, max_num_nodes, reducing_fns_list,
-                        save_data_freq=0, penalize_number=0):
+                        patience,early_stopping, save_data_freq=0, penalize_number=0):
 
         """ Initialize algorithm with several parameter values.
 
@@ -86,12 +87,18 @@ class QNAS(object):
                 can have without being penalized. The penalty is proportional to the number of
                 exceeding reducing layers. If 0, no penalization will be applied.
             reducing_fns_list: (list) list of reducing functions (stride > 2) names.
+            patience: (int) number of generations without improvement in the best fitness to
+                stop the evolution.
+            early_stopping: (bool) if True, the evolution will stop if the best fitness does not
+                improve by at least 0.005 (0.5%) for *patience* generations.
         """
 
         self.generations = max_generations
         self.update_quantum_gen = update_quantum_gen
         self.replace_method = replace_method
         self.penalize_number = penalize_number
+        self.patience = patience
+        self.early_stopping = early_stopping
 
         if reducing_fns_list:
             self.penalties = np.zeros(shape=(num_quantum_ind * repetition))
@@ -386,6 +393,26 @@ class QNAS(object):
 
         self.qpop_params.current_pop = log_data['params_pop']
         self.qpop_net.current_pop = log_data['net_pop']
+        
+    def check_early_stopping(self):
+        """
+        Compute the early stopping of the evolution. If the best fitness does not improve 
+        by at least 0.005 (0.5%) for `patience` generations, the evolution stops.
+        """
+        if self.current_gen > 0:
+            improvement = (self.best_so_far - self.last_best_so_far) / self.last_best_so_far
+            if improvement > 0.005:
+                self.early_stopping_counter = 0
+            else:
+                self.early_stopping_counter += 1
+
+            self.logger.info(f"Early stopping counter: {self.early_stopping_counter}")
+            if self.early_stopping_counter >= self.patience:
+                self.logger.info(f"Early stopping at generation {self.current_gen}!")
+                return True
+
+        self.last_best_so_far = self.best_so_far
+        return False
 
     def update_quantum(self):
         """ Update quantum populations of networks and hyperparameters. """
@@ -428,7 +455,8 @@ class QNAS(object):
         """ Run the evolution. """
         start_evolution = time.time()
         max_generations = self.generations
-
+        print(f"early stopping enable?: {self.early_stopping}")
+        
         # Update maximum number of generations if continue previous evolution process
         if self.current_gen > 0:
             max_generations += self.current_gen + 1
@@ -442,8 +470,9 @@ class QNAS(object):
                 int_hours, int_mins, est_hours, est_mins = calculate_time(start_evolution,int_time,self.current_gen, max_generations, end_evol=False)
                 self.logger.info(f"Current evolution time at generation {self.current_gen}: {int_hours} hours and {int_mins} mins")
                 self.logger.info(f"Estimated time to finish the evolution: {est_hours} hours and {est_mins} mins")
-                
+
             self.generate_classical()
+            if self.early_stopping and self.check_early_stopping(): break # Early stopping
             self.go_next_gen()
         
         end_evolution = time.time()

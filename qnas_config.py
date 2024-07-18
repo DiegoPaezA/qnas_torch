@@ -99,6 +99,7 @@ class ConfigParameters(object):
                               ('update_quantum_gen', int),
                               ('save_data_freq', int),
                               ('params_ranges', dict),
+                              ('patience', int),
                               ('function_dict', dict)],
                      'train': [('batch_size', int),
                                ('eval_batch_size', int),
@@ -144,6 +145,7 @@ class ConfigParameters(object):
         # Get the parameters lower and upper limits
         ranges = self._get_ranges(config_file)
         self.QNAS_spec['params_ranges'] = OrderedDict(sorted(ranges.items()))
+        self.QNAS_spec['early_stopping'] = self.args['early_stopping']
 
         self._get_fn_spec()
 
