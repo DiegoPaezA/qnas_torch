@@ -26,8 +26,6 @@ from torch.profiler import profile, record_function, ProfilerActivity
 
 
 TRAIN_TIMEOUT = 5400
-MAX_PARAMS = 11170884 # Maximum number of parameters for a model - ResNet18 has 11,170,884 parameters
-MAX_INFER_TIME = 2586 # Maximum inference time in microseconds
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
 log_directory = os.path.join(current_directory, 'logs')
@@ -48,11 +46,11 @@ def mofitness(acc, params, inference_time, T_p, T_t) -> float:
     :param T_t: Maximum allowable inference time
     :return: Fitness value
     """
-    # Asegurarse de que acc está en el rango correcto
+    # check if accuracy is between 0 and 1
     acc_in_range = 0 <= acc <= 1
     acc = acc if acc_in_range else acc / 100.0
     
-    # Determinar pesos basados en parámetros y tiempo de inferencia
+    # Check if the number of parameters and inference time are within the limits
     if params <= T_p:
         w_p = -0.01
     else:
@@ -63,11 +61,10 @@ def mofitness(acc, params, inference_time, T_p, T_t) -> float:
     else:
         w_t = -1
     
-    # Calcular el valor de fitness, evitando la división por cero
     params_ratio = params / T_p if T_p != 0 else 0
     inference_time_ratio = inference_time / T_t if T_t != 0 else 0
     
-    # Evitar elevar 0.0 a una potencia negativa
+    # avoid errors when the ratio is 0
     if params_ratio == 0:
         params_factor = 0
     else:
@@ -78,7 +75,6 @@ def mofitness(acc, params, inference_time, T_p, T_t) -> float:
     else:
         inference_time_factor = inference_time_ratio ** w_t
     
-    # Calcular el valor de fitness con las correcciones aplicadas
     fitness_value = acc * params_factor * inference_time_factor
     fitness_value = fitness_value if acc_in_range else fitness_value * 100.0
 
