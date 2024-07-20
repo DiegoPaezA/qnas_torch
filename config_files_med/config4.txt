@@ -11,6 +11,7 @@ QNAS:
     update_quantum_gen: 5
     update_quantum_rate: 0.1
     save_data_freq: 10
+    patience: 60
 
     params_ranges:
         decay: 0.9
@@ -34,7 +35,7 @@ train:
     max_epochs: 50
     epochs_to_eval: 5 
     optimizer: AdamW
-    fitness_metric: median_accuracy
+    fitness_metric: best_accuracy
     mixed_precision: True
     available_gpus: [0, 1] # gpu0, gpu1, gpu2 [0, 1, 2]
     device: cuda:0
@@ -50,7 +51,7 @@ train:
     # Tensorflow
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
-    threads: 8
+    threads: 5
 
     # penalization parameters - scalarized fitness
     max_params: 2700000 # 2.7M

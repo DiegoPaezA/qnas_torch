@@ -11,6 +11,7 @@ QNAS:
     update_quantum_gen: 5
     update_quantum_rate: 0.1
     save_data_freq: 10
+    patience: 60
 
     params_ranges:
         decay: 0.9
@@ -50,7 +51,7 @@ train:
     # Tensorflow
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
-    threads: 8
+    threads: 5
 
     # penalization parameters - scalarized fitness
     max_params: 6500000 # 6.5M
