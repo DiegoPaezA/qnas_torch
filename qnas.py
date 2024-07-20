@@ -399,7 +399,7 @@ class QNAS(object):
         Compute the early stopping of the evolution. If the best fitness does not improve 
         by at least 0.005 (0.5%) for `patience` generations, the evolution stops.
         """
-        if self.current_gen > 0:
+        if self.current_gen > 1:
             improvement = (self.best_so_far - self.last_best_so_far) / self.last_best_so_far
             if improvement > 0.005:
                 self.early_stopping_counter = 0
@@ -472,8 +472,9 @@ class QNAS(object):
                 self.logger.info(f"Estimated time to finish the evolution: {est_hours} hours and {est_mins} mins")
 
             self.generate_classical()
-            if self.early_stopping and self.check_early_stopping(): break # Early stopping
             self.go_next_gen()
+            
+            if self.early_stopping and self.check_early_stopping(): break
         
         end_evolution = time.time()
         evolution_hours, evolution_minutes = calculate_time(start_evolution,end_evolution)
