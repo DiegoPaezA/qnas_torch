@@ -470,47 +470,47 @@ class ResidualV1(nn.Module):
         self.batch_norm_mu = mu
         self.batch_norm_epsilon = epsilon
         self.channels_last = channels_last
-        self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
+        self.padding = (self.kernel_size - 1) // 2  # Calculate "same" padding
         
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
-                               kernel_size=self.kernel_size,stride=strides, 
+                               kernel_size=self.kernel_size, stride=strides, 
                                padding=self.padding, bias=False)
-        self.bn1 = nn.BatchNorm2d(num_features=self.filters)
+        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=mu, eps=epsilon)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
                                kernel_size=self.kernel_size, stride=1, 
                                padding=self.padding, bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters, momentum=mu, eps=epsilon)
         
         # Shortcut connection
-        self.shortcut = nn.Identity()
+        if strides != 1 or in_channels != filters:
+            self.shortcut = nn.Conv2d(in_channels, filters, kernel_size=1, stride=strides, bias=False)
+        else:
+            self.shortcut = nn.Identity()
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')
         init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')
+        if isinstance(self.shortcut, nn.Conv2d):
+            init.kaiming_normal_(self.shortcut.weight, mode='fan_out', nonlinearity='relu')
 
     def forward(self, inputs):
         if self.channels_last:
-            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
+            inputs = inputs.permute(0, 3, 1, 2)  # Convert NHWC to NCHW format
         
-        #print(f'inputs.shape V1: {inputs.shape}')            
         tensor = self.conv1(inputs)
         tensor = self.bn1(tensor)
         tensor = F.relu(tensor)
-        #print(f'tensor.shape Layer 1: {tensor.shape}')
             
         tensor = self.conv2(tensor)
         tensor = self.bn2(tensor)
               
-        #print(f'tensor.shape Layer 2: {tensor.shape}')
-              
         shortcut = self.shortcut(inputs)
-        tensor, shortcut = pad_features([tensor, shortcut]) # Pad the features if the number of channels is different
-             
-        tensor = F.relu(tensor + shortcut)
+
+        tensor += shortcut
+        tensor = F.relu(tensor)
         
         if self.channels_last:
-            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
+            tensor = tensor.permute(0, 2, 3, 1)  # Convert NCHW to NHWC format
         
-        #print(f'output.shape: {tensor.shape}')
         return tensor
 
 class ResidualV1CBAM(nn.Module):
