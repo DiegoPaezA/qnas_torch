@@ -411,7 +411,7 @@ class DWConvBlock(nn.Module):
 
 class MBConv(nn.Module):
     """
-    MobileNetV2 Bottleneck Block with Squeeze-and-Excitation (SE) Block.
+    MobileNetV3 Bottleneck Block with Squeeze-and-Excitation (SE) Block.
     """
     def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
         super(MBConv, self).__init__()
@@ -450,7 +450,7 @@ class MBConv(nn.Module):
         out = self.depthwise_relu(out)
 
         # Squeeze-and-Excitation
-        out = self.se_block(out)
+        out = self.se_block(out) # skip is inside the block
 
         # Project
         out = self.project_conv(out)
@@ -481,15 +481,11 @@ class ResidualV1(nn.Module):
                                padding=self.padding, bias=False)
         self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
-        self.projection = nn.Sequential(
-            nn.Conv2d(in_channels, filters, kernel_size=1, padding=0, stride=strides, bias=False),
-            nn.BatchNorm2d(num_features=self.filters)
-        ) if strides != 1 or in_channels != filters else nn.Identity()
+        # Shortcut connection
+        self.shortcut = nn.Identity()
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')
         init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')
-        if not isinstance(self.projection, nn.Identity):
-            init.kaiming_normal_(self.projection[0].weight, mode='fan_out', nonlinearity='relu')
 
     def forward(self, inputs):
         if self.channels_last:
@@ -506,8 +502,10 @@ class ResidualV1(nn.Module):
               
         #print(f'tensor.shape Layer 2: {tensor.shape}')
               
-        tensor += self.projection(inputs)
-        tensor = F.relu(tensor)
+        shortcut = self.shortcut(inputs)
+        tensor, shortcut = pad_features([tensor, shortcut]) # Pad the features if the number of channels is different
+             
+        tensor = F.relu(tensor + shortcut)
         
         if self.channels_last:
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
