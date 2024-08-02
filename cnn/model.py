@@ -430,7 +430,7 @@ class MBConv(nn.Module):
         # Squeeze-and-Excitation
         self.se_block = SEBlock(mid_channels, reduction_ratio)
 
-        # Project
+        # Project - Pointwise
         self.project_conv = nn.Conv2d(mid_channels, filters, kernel_size=1, bias=False)
         self.project_bn = nn.BatchNorm2d(filters)
         
@@ -452,9 +452,111 @@ class MBConv(nn.Module):
         # Squeeze-and-Excitation
         out = self.se_block(out) # skip is inside the block
 
+        # Project - project the features back to the original number of channels
+        out = self.project_conv(out)
+        out = self.project_bn(out)
+
+        if self.use_residual:
+            out = out + identity
+
+        return out
+    
+class MBConv_V2(nn.Module):
+    """
+    MobileNetV2 Bottleneck Block
+    Ref 1: Effective Data Augmentation and Training Techniques for Improving Deep Learning in Plant Leaf Disease Recognition
+    link: https://tinyurl.com/2axqr4cl
+    """
+    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
+        super(MBConv_V2, self).__init__()
+        mid_channels = in_channels * expand_ratio
+
+        # Expand
+        self.expand_conv = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.expand_bn = nn.BatchNorm2d(mid_channels)
+        self.expand_relu = nn.ReLU6(inplace=True)
+
+        # Depthwise
+        self.depthwise_conv = nn.Conv2d(mid_channels, mid_channels, kernel_size=kernel, stride=strides, padding=(kernel - 1) // 2, groups=mid_channels, bias=False)
+        self.depthwise_bn = nn.BatchNorm2d(mid_channels)
+        self.depthwise_relu = nn.ReLU6(inplace=True)
+
+        # Project
+        self.project_conv = nn.Conv2d(mid_channels, filters, kernel_size=1, bias=False)
+        self.project_bn = nn.BatchNorm2d(filters)
+        
+        self.use_residual = (in_channels == filters and strides == 1)
+
+    def forward(self, x):
+        identity = x
+
+        # Expand
+        out = self.expand_conv(x)
+        out = self.expand_bn(out)
+        out = self.expand_relu(out)
+
+        # Depthwise
+        out = self.depthwise_conv(out)
+        out = self.depthwise_bn(out)
+        out = self.depthwise_relu(out)
+
         # Project
         out = self.project_conv(out)
         out = self.project_bn(out)
+
+        if self.use_residual:
+            out = out + identity
+
+        return out
+    
+class MBConv_EPPGA(nn.Module):
+    """
+    EPPGA block structure: MobileNetV3 style Bottleneck Block with Squeeze-and-Excitation (SE) Block.
+    Ref: An evolutionary neural architecture search method based on performance prediction and weight inheritance
+    link: https://www.sciencedirect.com/science/article/pii/S0020025524003797
+    """
+    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
+        super(MBConv_EPPGA, self).__init__()
+        mid_channels = in_channels * expand_ratio
+
+        # Expand
+        self.expand_conv = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.expand_bn = nn.BatchNorm2d(mid_channels)
+        self.expand_relu = nn.ReLU6(inplace=True)
+
+        # Depthwise
+        self.depthwise_conv = nn.Conv2d(mid_channels, mid_channels, kernel_size=kernel, stride=strides, padding=(kernel - 1) // 2, groups=mid_channels, bias=False)
+        self.depthwise_bn = nn.BatchNorm2d(mid_channels)
+        self.depthwise_relu = nn.ReLU6(inplace=True)
+        
+        # Pointwise - Project
+        self.pointwise_conv = nn.Conv2d(mid_channels, filters, kernel_size=1, bias=False)
+        self.pointwise_bn = nn.BatchNorm2d(filters)
+
+        # Squeeze-and-Excitation
+        self.se_block = SEBlock(filters, reduction_ratio)
+        
+        self.use_residual = (in_channels == filters and strides == 1)
+
+    def forward(self, x):
+        identity = x
+
+        # Expand
+        out = self.expand_conv(x)
+        out = self.expand_bn(out)
+        out = self.expand_relu(out)
+
+        # Depthwise
+        out = self.depthwise_conv(out)
+        out = self.depthwise_bn(out)
+        out = self.depthwise_relu(out)
+        
+        # Pointwise - to project the features back to the original number of channels
+        out = self.pointwise_conv(out)
+        out = self.pointwise_bn(out)
+
+        # Squeeze-and-Excitation
+        out = self.se_block(out) # skip is inside the block
 
         if self.use_residual:
             out = out + identity
@@ -470,47 +572,49 @@ class ResidualV1(nn.Module):
         self.batch_norm_mu = mu
         self.batch_norm_epsilon = epsilon
         self.channels_last = channels_last
-        self.padding = (self.kernel_size - 1) // 2  # Calculate "same" padding
+        self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
-                               kernel_size=self.kernel_size, stride=strides, 
+                               kernel_size=self.kernel_size,stride=strides, 
                                padding=self.padding, bias=False)
-        self.bn1 = nn.BatchNorm2d(num_features=self.filters, momentum=mu, eps=epsilon)
+        self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
                                kernel_size=self.kernel_size, stride=1, 
                                padding=self.padding, bias=False)
-        self.bn2 = nn.BatchNorm2d(num_features=self.filters, momentum=mu, eps=epsilon)
+        self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
-        # Shortcut connection
-        if strides != 1 or in_channels != filters:
-            self.shortcut = nn.Conv2d(in_channels, filters, kernel_size=1, stride=strides, bias=False)
-        else:
-            self.shortcut = nn.Identity()
+        self.projection = nn.Sequential(
+            nn.Conv2d(in_channels, filters, kernel_size=1, padding=0, stride=strides, bias=False),
+            nn.BatchNorm2d(num_features=self.filters)
+        ) if strides != 1 or in_channels != filters else nn.Identity()
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')
         init.kaiming_normal_(self.conv2.weight, mode='fan_out', nonlinearity='relu')
-        if isinstance(self.shortcut, nn.Conv2d):
-            init.kaiming_normal_(self.shortcut.weight, mode='fan_out', nonlinearity='relu')
+        if not isinstance(self.projection, nn.Identity):
+            init.kaiming_normal_(self.projection[0].weight, mode='fan_out', nonlinearity='relu')
 
     def forward(self, inputs):
         if self.channels_last:
-            inputs = inputs.permute(0, 3, 1, 2)  # Convert NHWC to NCHW format
+            inputs = inputs.permute(0, 3, 1, 2) # Convert NHWC to NCHW format
         
+        #print(f'inputs.shape V1: {inputs.shape}')            
         tensor = self.conv1(inputs)
         tensor = self.bn1(tensor)
         tensor = F.relu(tensor)
+        #print(f'tensor.shape Layer 1: {tensor.shape}')
             
         tensor = self.conv2(tensor)
         tensor = self.bn2(tensor)
               
-        shortcut = self.shortcut(inputs)
-
-        tensor += shortcut
+        #print(f'tensor.shape Layer 2: {tensor.shape}')
+              
+        tensor += self.projection(inputs)
         tensor = F.relu(tensor)
         
         if self.channels_last:
-            tensor = tensor.permute(0, 2, 3, 1)  # Convert NCHW to NHWC format
+            tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
         
+        #print(f'output.shape: {tensor.shape}')
         return tensor
 
 class ResidualV1CBAM(nn.Module):
@@ -676,53 +780,6 @@ class ResidualV1Pr(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
 
         return tensor
-
-class InvResidualBlock(nn.Module):
-    """ Inverted Residual Block with Depthwise Separable Convolution """
-
-    def __init__(self, kernel=3, in_channels=1, filters=1, strides=1,expansion_factor=6, mu=1, epsilon=1, channels_last=False):
-        super(InvResidualBlock, self).__init__()
-        self.stride = strides
-        self.use_residual = strides == 1 and in_channels == filters
-        self.channels_last = channels_last
-
-        hidden_dim = in_channels * expansion_factor
-
-        layers = []
-        if expansion_factor != 1:
-            layers.extend([
-                nn.Conv2d(in_channels, hidden_dim, kernel_size=1, stride=1, padding=0, bias=False),
-                nn.BatchNorm2d(hidden_dim),
-                nn.ReLU6(inplace=True)
-            ])        
-        # Depthwise Convolution
-        layers.extend([
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, stride=strides, padding=1, groups=hidden_dim, bias=False),
-            nn.BatchNorm2d(hidden_dim),
-            nn.ReLU6(inplace=True)
-        ])
-
-        # Pointwise Convolution for Projection
-        layers.extend([
-            nn.Conv2d(hidden_dim, filters, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(filters),
-        ])
-
-        self.conv = nn.Sequential(*layers)
-
-    def forward(self, x):
-        if self.channels_last:
-            x = x.permute(0, 3, 1, 2)  # Convert NHWC to NCHW format
-
-        if self.use_residual:
-            out = x + self.conv(x)
-        else:
-            out = self.conv(x)
-
-        if self.channels_last:
-            out = out.permute(0, 2, 3, 1)  # Convert NCHW to NHWC format
-
-        return out
         
 class MaxPooling(nn.Module):
     """ Max Pooling layer """
@@ -859,42 +916,14 @@ functions_dict = {'ConvBlock': ConvBlock,
                   'MBConv': MBConv,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
-                  'DefConvBlock': DefConvBlock,
                   'CBAMConvBlock': CBAMConvBlock,
                   'ResidualV1CBAM': ResidualV1CBAM,
                   'CBAMBlock' : CBAMBlock,
-                  'InvResidualBlock': InvResidualBlock,
                   'MaxPooling': MaxPooling,
                   'AvgPooling': AvgPooling,
                   'FullyConnected': FullyConnected,
                   'no_op': NoOp}
  
-def pad_features(tensors, channels_last=False):
-    """ Pad with zeros the channels of the tensor in *tensors* list 
-    that have the smaller number of feature maps.
-    Args:
-        tensors: list of 2 tensors to compare sizes.
-    Returns:
-        tensors with matching number of channels.
-    """
-    shapes = [list(t.shape) for t in tensors]
-    
-    channel_axis = - 1 if channels_last else 1
-    
-    if shapes[0][channel_axis] < shapes[1][channel_axis]:
-        small_ch_id, large_ch_id = 0, 1
-    else:
-        small_ch_id, large_ch_id = 1, 0
-    
-    pad = shapes[large_ch_id][channel_axis] - shapes[small_ch_id][channel_axis]
-    pad_beg = pad // 2
-    pad_end = pad - pad_beg
-    if channels_last:
-        tensors[small_ch_id] = F.pad(tensors[small_ch_id],(pad_beg, pad_end, 0, 0, 0, 0, 0, 0))
-    else:
-        tensors[small_ch_id] = F.pad(tensors[small_ch_id], (0, 0, 0, 0,pad_beg,pad_end, 0, 0))
-        
-    return tensors
 
 class NetworkGraph(nn.Module):
     def __init__(self, num_classes, mu=0.9, epsilon=2e-5, in_channels=3):
@@ -938,7 +967,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr','DefConvBlock','InvResidualBlock']:
+            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
