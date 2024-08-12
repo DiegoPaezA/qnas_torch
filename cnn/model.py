@@ -914,6 +914,8 @@ functions_dict = {'ConvBlock': ConvBlock,
                   'DWConvBlock': DWConvBlock,
                   'SEConvBlock': SEConvBlock,
                   'MBConv': MBConv,
+                  'MBConvV2': MBConv_V2,
+                  'MBEPPGA': MBConv_EPPGA,
                   'ResidualV1': ResidualV1,
                   'ResidualV1Pr': ResidualV1Pr,
                   'CBAMConvBlock': CBAMConvBlock,
@@ -967,7 +969,7 @@ class NetworkGraph(nn.Module):
             parameters = fn_dict[name]
             if parameters['function'] == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM','MBConv','ResidualV1', 'ResidualV1Pr']:
+            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM','MBConv','MBConvV2','MBEPPGA','ResidualV1', 'ResidualV1Pr']:
                 parameters['params']['mu'] = self.mu
                 parameters['params']['epsilon'] = self.epsilon
                 parameters['params']['in_channels'] = in_channels
