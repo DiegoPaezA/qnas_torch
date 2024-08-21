@@ -301,19 +301,19 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
      
     LOGGER.info(f"Training model {id_num} on device {device} ...")
     # Load data info
-    if hasattr(input.available_datasets, params['dataset'].lower()):
+    if params['dataset'].lower() in input.available_datasets:
         dataset_info = input.available_datasets[params['dataset'].lower()]
     else:
         dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
     
-    params['num_classes'] = dataset_info["num_classes"]
-    params['task'] = dataset_info["task"]
+    params['num_classes'] = dataset_info['num_classes']
+    params['task'] = dataset_info['task']
         
     # check if cbam is a key in the fn_dict
-    has_cbam_key = any(key.startswith("cbam") for key in fn_dict)
+    has_cbam_key = any(key.startswith('cbam') for key in fn_dict)
     
     # Create the model
-    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"])    
+    model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'])    
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list, cbam=has_cbam_key)
     
