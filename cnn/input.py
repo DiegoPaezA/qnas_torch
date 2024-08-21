@@ -37,9 +37,31 @@ cifar100_info = {
   'balanced_train': True
 }
 
+atletasaxial_info = {
+  'dataset': 'ATLETA_AXIAL',
+  'mean': [0.485, 0.456, 0.406],
+  'std': [0.229, 0.224, 0.225],
+  'shape': [3, 128, 128],
+  'num_classes': 3,
+  'task': 'classification',
+  'balanced_train': False
+}
+
+atletascoronal_info = {
+  'dataset': 'ATLETA_CORONAL',
+  'mean': [0.485, 0.456, 0.406],
+  'std': [0.229, 0.224, 0.225],
+  'shape': [3, 128, 128],
+  'num_classes': 3,
+  'task': 'classification',
+  'balanced_train': False
+}
+
 available_datasets = {
   'cifar10': cifar10_info,
-  'cifar100': cifar100_info
+  'cifar100': cifar100_info,
+  'atleta_axial': atletasaxial_info,
+  'atleta_coronal': atletascoronal_info
 }
 
 class MyDataset(Dataset):
@@ -58,7 +80,7 @@ class MyDataset(Dataset):
         
 class GenericDataLoader:
   """A generic data loader for PyTorch, supporting various datasets and data augmentation."""
-  def __init__(self, params: dict, train_split=0.9, seed=None, info: dict = None):
+  def __init__(self, params: dict, train_split=0.9, seed=None, info: dict = {}):
     """
     Initialize the GenericDataLoader.
     
@@ -86,7 +108,7 @@ class GenericDataLoader:
     if self.download_status:
       os.makedirs(self.params['data_path'])
 
-    if info is None:
+    if not info:
         # Check if the dataset is available in the available_datasets dict
         if self.params['dataset'].lower() in available_datasets.keys():
           dataset_family = "local"
@@ -118,7 +140,7 @@ class GenericDataLoader:
             self.num_classes = len(dataset_.classes)
             self.task = 'classification'
           
-        elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+        elif self.params['dataset'].lower() in INFO and hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
           dataset_family = "medmnist"
           general_info = INFO[self.params['dataset'].lower()]
           if util.check_file_exists(os.path.join(self.params['data_path'], 'data_info.txt')):
@@ -154,33 +176,29 @@ class GenericDataLoader:
       util.create_info_file(out_path=self.params['data_path'], info_dict=self.info_dict)
     
     
-    # Transformations
-    self.transform = Compose([
-        ToTensor(),
-        Normalize(mean=mean, std=std)
-    ])
-    
+    # Define common transformations
+    basic_transform = [ToTensor(), Normalize(mean=mean, std=std)]
+    resize_transform = [Resize((height, width))] + basic_transform
+
+    # Set the self.transform
+    self.transform = Compose(resize_transform if 'atleta' in self.params['dataset'].lower() else basic_transform)
+
+    # Check for data augmentation
     if self.params['data_augmentation']:
+        augmentation_transform = [TrivialAugmentWide(num_magnitude_bins=31)] + basic_transform
+
         if dataset_family == "medmnist":
-          self.train_transform = Compose([
-              TrivialAugmentWide(num_magnitude_bins=31),
-              ToTensor(),
-              Normalize(mean=mean, std=std)
-          ])
+            self.train_transform = Compose(augmentation_transform)
         else:
-          pad = 4
-          self.train_transform = Compose([
-              #Resize((height + pad, width + pad)),
-              #RandomCrop((height, width)),
-              TrivialAugmentWide(num_magnitude_bins=31),
-              ToTensor(),
-              Normalize(mean=mean, std=std)
-          ])
+            # Optionally resize for 'atleta' datasets or other datasets
+            if 'atleta' in self.params['dataset'].lower():
+                self.train_transform = Compose([Resize((height, width))] + augmentation_transform)
+            else:
+                self.train_transform = Compose(augmentation_transform)
     else:
-      self.train_transform = Compose([
-            ToTensor(),
-            Normalize(mean=mean, std=std)
-        ])
+        # Use self.transform if no data augmentation
+        self.train_transform = self.transform
+    
       
   def get_loader(self, for_train=True, pin_memory_device="cuda"):
     """
@@ -199,12 +217,19 @@ class GenericDataLoader:
       test_dataset = dataset_class(self.params['data_path'], train=False, download=self.download_status,transform=self.transform)
       self.download_status = not os.path.exists(self.params['data_path'])
       
-    elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+    elif self.params['dataset'].lower() in INFO and hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
       dataset_class = getattr(medmnist, INFO[self.params['dataset'].lower()]['python_class'])
       train_dataset = dataset_class(root=self.params['data_path'], split='train', download=self.download_status, transform=self.train_transform, as_rgb=True)
       valid_dataset = dataset_class(root=self.params['data_path'], split='val', download=self.download_status, transform=self.transform, as_rgb=True)
       test_dataset = dataset_class(root=self.params['data_path'], split='test', download=self.download_status, transform=self.transform, as_rgb=True)
       self.download_status = not os.path.exists(self.params['data_path'])
+    elif self.params['dataset'].lower() == 'atleta_axial' or self.params['dataset'].lower() == 'atleta_coronal':
+      try:
+        train_dataset =torchvision.datasets.ImageFolder(root=f"{self.params['data_path']}/train", transform=self.train_transform)
+        valid_dataset = torchvision.datasets.ImageFolder(root=f"{self.params['data_path']}/val", transform=self.transform)
+        test_dataset = torchvision.datasets.ImageFolder(root=f"{self.params['data_path']}/test", transform=self.transform)
+      except:
+        raise ValueError(f"Dataset is not available in the path {self.params['data_path']}")
     else:
       raise NotImplementedError('Custom dataset is not implemented yet.')
     
@@ -259,7 +284,7 @@ class GenericDataLoader:
       train_dataset = MyDataset(train_subset, transform=self.train_transform)
       valid_dataset = MyDataset(valid_subset, transform=self.transform)
       
-    elif hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
+    elif self.params['dataset'].lower() in INFO and hasattr(medmnist, INFO[self.params['dataset'].lower()]['python_class']):
       
       num_train = len(train_dataset)
       num_val = len(valid_dataset)
@@ -288,8 +313,11 @@ class GenericDataLoader:
       
         train_dataset = Subset(train_dataset, train_indices)
         valid_dataset = Subset(valid_dataset, val_indices)
+    elif 'atleta' in self.params['dataset'].lower():
+      pass
+    else:
+      raise NotImplementedError('Custom dataset is not implemented yet.')
 
-    
     train_loader = DataLoader(
       train_dataset,
       batch_size=self.params['batch_size'],
