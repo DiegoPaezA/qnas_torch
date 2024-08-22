@@ -237,6 +237,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     params['cpu_inference_time'] = cpu_inference_time
     params['model_memory_usage'] = model_memory_usage
     params['best_accuracy'] = best_accuracy
+    params['fitness_val_loss'] = fitness_val_loss
     params['mean_eval_accuracy'] = mean_eval_accuracy
     params['median_eval_accuracy'] = median_eval_accuracy
     params['scalar_multi_objective'] = scalar_multi_objective
@@ -255,6 +256,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['model_memory_usage'] = model_memory_usage # in MB
     training_results['total_trainable_params'] = total_trainable_params / 1e6 # in millions
     training_results['best_accuracy'] = best_accuracy
+    training_results['fitness_val_loss'] = fitness_val_loss
     training_results['mean_eval_accuracy'] = mean_eval_accuracy
     training_results['median_eval_accuracy'] = median_eval_accuracy
     training_results['scalar_multi_objective'] = scalar_multi_objective        
@@ -357,6 +359,10 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
                 return_val[2] = results_dict['cuda_inference_time']
             elif params['fitness_metric'] == 'median_accuracy':
                 return_val[0] = results_dict['median_eval_accuracy']
+                return_val[1] = results_dict['total_trainable_params']
+                return_val[2] = results_dict['cuda_inference_time']
+            elif params['fitness_metric'] == 'best_loss':
+                return_val[0] = results_dict['fitness_val_loss'] # 1 - best_validation_loss
                 return_val[1] = results_dict['total_trainable_params']
                 return_val[2] = results_dict['cuda_inference_time']
             elif params['fitness_metric'] == 'scalar_multi_objective':
