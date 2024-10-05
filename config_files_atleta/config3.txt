@@ -57,7 +57,7 @@ train:
     # Tensorflow
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
-    threads: 12
+    threads: 8
 
     # penalization parameters - scalarized fitness
     max_params: 15620000 # 15.6M

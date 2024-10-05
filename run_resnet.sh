@@ -1,19 +1,19 @@
 #!/bin/bash
 
 echo "Starting ResNet 18"
-exp_path="experiments_cifar10/resnet_18"
+exp_path="experiments_atleta_axial_v3/resnet_18"
 
-CUDA_VISIBLE_DEVICES=1 python train_resnet.py \
+CUDA_VISIBLE_DEVICES=0 python train_resnet.py \
     --experiment_path "$exp_path" \
-    --data_path cifar10_data \
-    --dataset cifar10 \
+    --data_path atleta_axial_data \
+    --dataset atleta_axial \
     --model_flag resnet18 \
     --retrain_folder retrain \
     --config_code F10 \
     --log_level INFO \
-    --max_epochs 100 \
-    --batch_size 128 \
-    --eval_batch_size 128 \
+    --max_epochs 300 \
+    --batch_size 32 \
+    --eval_batch_size 16 \
     --device cuda:0 \
     --num_repetitions 3 \
     --lr_scheduler "multistep" \
@@ -23,19 +23,19 @@ CUDA_VISIBLE_DEVICES=1 python train_resnet.py \
 pid_resnet18=$!  # capture the process ID of the ResNet 18 command
 
 echo "Starting ResNet 50"
-exp_path="experiments_cifar10/resnet_50"
+exp_path="experiments_atleta_axial_v3/resnet_50"
 
-CUDA_VISIBLE_DEVICES=1 python train_resnet.py \
+CUDA_VISIBLE_DEVICES=0 python train_resnet.py \
     --experiment_path "$exp_path" \
-    --data_path cifar10_data \
-    --dataset cifar10 \
+    --data_path atleta_axial_data \
+    --dataset atleta_axial \
     --model_flag resnet50 \
     --retrain_folder retrain \
     --config_code F10 \
     --log_level INFO \
-    --max_epochs 100 \
-    --batch_size 128 \
-    --eval_batch_size 128 \
+    --max_epochs 300 \
+    --batch_size 32 \
+    --eval_batch_size 16 \
     --device cuda:0 \
     --num_repetitions 3 \
     --lr_scheduler "multistep" \
