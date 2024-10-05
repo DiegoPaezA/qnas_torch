@@ -71,7 +71,7 @@ if __name__ == '__main__':
                         help='Directory where the evolved network logs are.')
     parser.add_argument('--data_path', type=str, required=True, help='Path to input data.')
     parser.add_argument('--dataset', type=str, required=True, help='Dataset name.', 
-                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist'])
+                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist' ,'atleta_axial', 'atleta_coronal'])
     parser.add_argument('--retrain_folder', type=str, default='retrain',
                         help='Name of the folder with retrain model files that will be saved '
                              'inside *experiment_path*.')
@@ -85,10 +85,10 @@ if __name__ == '__main__':
                         help='The maximum number of epochs during training. Default = 300.')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Size of the batch that will be divided into multiple GPUs.'
-                             ' Default = 128.')
+                            ' Default = 128.')
     parser.add_argument('--eval_batch_size', type=int, default=1000,
                         help='Size of the evaluation batch. Default = 0 (which means the '
-                             'entire validation dataset at once).')
+                            'entire validation dataset at once).')
     parser.add_argument('--limit_data', action='store_true',
                     help='Disable limit data during training. Default = False.')
     parser.add_argument('--device', type=str, default='cuda',
