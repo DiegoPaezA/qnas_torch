@@ -229,7 +229,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
         
     # Scalarized multi-objective function
     scalar_multi_objective = mofitness(best_accuracy, total_trainable_params, cuda_inference_time, params['max_params'], params['max_inference_time'])
-    fitness_val_loss = 1 - best_validation_loss
+    fitness_val_loss = (1 - best_validation_loss)*100.0
     
     params['total_params'] = total_params
     params['total_trainable_params'] = total_trainable_params
@@ -290,7 +290,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     Raises:
         TimeoutError: If the training process takes too long to complete.
     """
-   
+
     device = params['device']
     params['net_list'] = net_list
     model_path = os.path.join(params['experiment_path'], id_num)
@@ -300,7 +300,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     params['model_path'] = model_path
     params['generation'] = id_num.split('_')[0]
     params['individual'] = id_num.split('_')[1]
-     
+
     LOGGER.info(f"Training model {id_num} on device {device} ...")
     # Load data info
     if params['dataset'].lower() in input.available_datasets:

@@ -12,7 +12,7 @@ import numpy as np
 from time import time
 import torchvision.datasets
 from torch.utils.data import DataLoader, Subset, Dataset
-from torchvision.transforms import ToTensor, Resize, Compose, RandomCrop, Normalize, TrivialAugmentWide
+from torchvision.transforms import ToTensor, Resize, Compose, Normalize, TrivialAugmentWide
 from sklearn.model_selection import StratifiedShuffleSplit
 import medmnist
 from medmnist import INFO
@@ -104,7 +104,7 @@ class GenericDataLoader:
     self.info_dict = {'dataset': f'{self.params["dataset"]}'}
     self.info_dict['seed'] = seed
     self.download_status = not os.path.exists(self.params['data_path'])
-     
+    
     if self.download_status:
       os.makedirs(self.params['data_path'])
 
