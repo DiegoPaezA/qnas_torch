@@ -39,9 +39,9 @@ def main(**args):
                                                 log_level=config.train_spec['log_level'])
     
     qnas_cnn = qnas.QNAS(eval_pop, config.train_spec['experiment_path'],
-                         log_file=config.files_spec['log_file'],
-                         log_level=config.train_spec['log_level'],
-                         data_file=config.files_spec['data_file'])
+                        log_file=config.files_spec['log_file'],
+                        log_level=config.train_spec['log_level'],
+                        data_file=config.files_spec['data_file'])
 
     qnas_cnn.initialize_qnas(**config.QNAS_spec)
     
@@ -61,14 +61,14 @@ if __name__ == '__main__':
                         help='Configuration file name.')
     parser.add_argument('--continue_path', type=str, default='',
                         help='If the user wants to continue a previous evolution, point to '
-                             'the corresponding experiment path. Evolution parameters will be '
-                             'loaded from this folder.')
+                            'the corresponding experiment path. Evolution parameters will be '
+                            'loaded from this folder.')
     parser.add_argument('--log_level', choices=['NONE', 'INFO', 'DEBUG'], default='NONE',
                         help='Logging information level.')
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['RMSProp', 'Adam', 'AdamW', 'SGD'],
                         help='Optimizer to be used during training. Default = AdamW.')
     parser.add_argument('--fitness_metric', type=str, default='best_accuracy', 
-                        choices=['best_accuracy', 'mean_accuracy', 'median_accuracy', 'best_loss', 'scalar_multi_objective'],
+                        choices=['best_accuracy', 'best_loss', 'scalar_multi_objective'],
                         help='Fitness metric to be used during evolution. Default = accuracy.')
     parser.add_argument('--data_augmentation', action='store_true',
                     help='Disable data augmentation during training. Default = False.')

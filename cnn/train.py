@@ -8,8 +8,6 @@ Documentation:
     - Automatic mixed precision training (AMP): 
         - https://pytorch.org/docs/stable/amp.html, 
         - https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html#all-together-automatic-mixed-precision
-    - Profiling: Inference time
-        - https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html#using-profiler-to-analyze-execution-time
     
 """
 import os
@@ -18,11 +16,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from typing import Dict, List, Union, Any
-from cnn import model, input, metrics
+from cnn import model, input, metrics, fitness_utils
 from util import create_info_file, init_log, load_yaml
 from torch.cuda.amp import GradScaler
-from torch.profiler import profile, record_function, ProfilerActivity
-
 
 
 TRAIN_TIMEOUT = 5400
@@ -35,50 +31,6 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'train.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
-def mofitness(acc, params, inference_time, T_p, T_t) -> float:
-    """
-    Scalarized multi-objective fitness function.
-
-    :param acc: Classification accuracy of the architecture
-    :param params: Number of parameters of the architecture
-    :param inference_time: Inference time of the architecture
-    :param T_p: Maximum allowable number of parameters
-    :param T_t: Maximum allowable inference time
-    :return: Fitness value
-    """
-    # check if accuracy is between 0 and 1
-    acc_in_range = 0 <= acc <= 1
-    acc = acc if acc_in_range else acc / 100.0
-    
-    # Check if the number of parameters and inference time are within the limits
-    if params <= T_p:
-        w_p = -0.01
-    else:
-        w_p = -1
-    
-    if inference_time <= T_t:
-        w_t = -0.01
-    else:
-        w_t = -1
-    
-    params_ratio = params / T_p if T_p != 0 else 0
-    inference_time_ratio = inference_time / T_t if T_t != 0 else 0
-    
-    # avoid errors when the ratio is 0
-    if params_ratio == 0:
-        params_factor = 0
-    else:
-        params_factor = params_ratio ** w_p
-    
-    if inference_time_ratio == 0:
-        inference_time_factor = 0
-    else:
-        inference_time_factor = inference_time_ratio ** w_t
-    
-    fitness_value = acc * params_factor * inference_time_factor
-    fitness_value = fitness_value if acc_in_range else fitness_value * 100.0
-
-    return fitness_value
 
 
 def train_epoch(model, criterion, optimizer, data_loader, params, scaler):
@@ -86,25 +38,28 @@ def train_epoch(model, criterion, optimizer, data_loader, params, scaler):
     train_loss = 0.0
     correct = 0
     total = 0
-    device = params['device']
-    amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
-    for inputs, labels in data_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        optimizer.zero_grad()
-        
-        with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
+    device = torch.device(params['device'])
+    amp_device = device.type  # 'cuda' or 'cpu'
+    
+    with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            
             y_logits = model(inputs)
             if params['task'] == 'multi-class':
                 labels = labels.squeeze().long()
             loss = criterion(y_logits, labels)
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        train_loss += loss.item()
-        _, predicted = y_logits.max(1)
-        total += labels.size(0)
-        correct += predicted.eq(labels).sum().item()
-        
+            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            
+            train_loss += loss.item()
+            _, predicted = y_logits.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
+            
     accuracy = 100 * correct / total
     train_loss /= len(data_loader)
     return train_loss, accuracy
@@ -114,30 +69,29 @@ def evaluate(model, criterion, data_loader, params):
     validation_loss = 0.0
     correct = 0
     total = 0
-    device = params['device']
-    amp_device = device.split(':')[0] if device != 'cpu' else 'cpu'
+    device = torch.device(params['device'])
+    amp_device = device.type  # 'cuda' or 'cpu'
 
-    with torch.no_grad():
+    with torch.no_grad(), torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
         for inputs, labels in data_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
-                y_logits = model(inputs)
-                if params['task'] == 'multi-class':
-                    labels = labels.squeeze().long() # medmnist
-                loss = criterion(y_logits, labels)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            y_logits = model(inputs)
+            if params['task'] == 'multi-class':
+                labels = labels.squeeze().long()  # For datasets like MedMNIST
+            loss = criterion(y_logits, labels)
             validation_loss += loss.item()
             _, predicted = y_logits.max(1)
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
 
-    accuracy = 100 * correct / total
+    accuracy = 100.0 * correct / total
     validation_loss /= len(data_loader)
-
     return validation_loss, accuracy
 
 def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer, 
-          train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
-          params:Dict, debug=False) -> Dict:
+        train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
+        params:Dict, debug=False) -> Dict:
     """
     Train a neural network model.
 
@@ -167,8 +121,6 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     validation_accuracies = []
     best_accuracy = 0.0
     best_validation_loss = float('inf')
-    mean_eval_accuracy = 0.0
-    median_eval_accuracy = 0.0
     
     training_results = {}
     max_epochs = params['max_epochs']
@@ -198,48 +150,56 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
             if validation_loss < best_validation_loss:
                 best_validation_loss = validation_loss
                 create_info_file(params['model_path'], {'best_validation_loss': best_validation_loss}, 'best_validation_loss.txt')
-            if debug:
-                if epoch % 1 == 0:
-                    print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
-        if debug:    
-            if epoch % 5 == 0 and epoch < start_eval:
-                print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss}")
-    
-    mean_eval_accuracy = float(np.mean(validation_accuracies))
-    median_eval_accuracy = float(np.median(validation_accuracies))
+    if debug:
+        if epoch >= start_eval:
+            print(f"Epoch [{epoch}/{max_epochs}] - Training Loss: {train_loss:.4f} - Validation Loss: {validation_loss:.4f} - Validation Accuracy: {accuracy:.2f}%")
+        elif epoch % 5 == 0:
+            print(f"Epoch [{epoch}/{max_epochs}] - Training Loss: {train_loss:.4f}")
             
     params['t1'] = time.time()
     params['training_time'] = params['t1'] - params['t0']
     
-    # Measure inference time
+    model_metrics = metrics.ModelMetrics(model, device=params['device'])
+    
     inference_images = next(iter(val_loader))[0][:10].to(params['device'])
+    input_shape = params['input_shape']
     
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
-        with record_function("model_inference"):
-            model(inference_images)
+    cuda_inference_time = model_metrics.measure_inference_time(inference_images)
+    model_memory_usage = model_metrics.measure_memory(input_shape) / (1024 ** 2)  # Convert bytes to MB
+    total_trainable_params = model_metrics.measure_parameters()
+    total_flops = model_metrics.measure_flops(input_shape)
     
-    model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
-    cpu_inference_time = prof.key_averages()[0].cpu_time
-    cuda_inference_time = prof.key_averages()[0].cuda_time
-    total_params = sum(p.numel() for p in model.parameters())
-    total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    metric_type = params['fitness_metric'] 
     
-    if cuda_inference_time == 0:
-        cuda_inference_time = metrics.measure_inference_time(model, inference_images)
+    metric_value = best_accuracy if metric_type == 'accuracy' else best_validation_loss
+    
+    if  params['fitness_metric']  == 'best_accuracy':
+        metric_value = best_accuracy
+        metric_type = 'accuracy'
+    elif  params['fitness_metric']  == 'best_loss':
+        metric_value = best_validation_loss
+        metric_type = 'loss'
+    elif  params['fitness_metric']  == 'scalar_multi_objective':
+        if metric_type == 'accuracy':
+            metric_value = best_accuracy
+        elif metric_type == 'loss':
+            metric_value = best_validation_loss
+        
+        
         
     # Scalarized multi-objective function
-    scalar_multi_objective = mofitness(best_accuracy, total_trainable_params, cuda_inference_time, params['max_params'], params['max_inference_time'])
-    fitness_val_loss = (1 - best_validation_loss)*100.0
+    scalar_multi_objective = fitness_utils.mofitness(metric_value=metric_value,params=total_trainable_params,inference_time=cuda_inference_time,
+                                    T_p=params['max_params'], T_t=params['max_inference_time'],metric_type=metric_type)
     
-    params['total_params'] = total_params
+    fitness_val_loss = (1 / (1 + best_validation_loss))*100.0 # Lower loss leads to higher fitness - Reciprocal Transformation
+    
     params['total_trainable_params'] = total_trainable_params
     params['cuda_inference_time'] = cuda_inference_time
-    params['cpu_inference_time'] = cpu_inference_time
     params['model_memory_usage'] = model_memory_usage
+    params['total_flops'] = total_flops
     params['best_accuracy'] = best_accuracy
+    params['best_validation_loss'] = best_validation_loss
     params['fitness_val_loss'] = fitness_val_loss
-    params['mean_eval_accuracy'] = mean_eval_accuracy
-    params['median_eval_accuracy'] = median_eval_accuracy
     params['scalar_multi_objective'] = scalar_multi_objective
 
     
@@ -255,10 +215,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['cuda_inference_time'] = cuda_inference_time # in microseconds
     training_results['model_memory_usage'] = model_memory_usage # in MB
     training_results['total_trainable_params'] = total_trainable_params / 1e6 # in millions
+    training_results['total_flops'] = total_flops
     training_results['best_accuracy'] = best_accuracy
     training_results['fitness_val_loss'] = fitness_val_loss
-    training_results['mean_eval_accuracy'] = mean_eval_accuracy
-    training_results['median_eval_accuracy'] = median_eval_accuracy
     training_results['scalar_multi_objective'] = scalar_multi_objective        
     return training_results
 
@@ -353,14 +312,6 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
                 return_val[0] = results_dict['best_accuracy']
                 return_val[1] = results_dict['total_trainable_params']
                 return_val[2] = results_dict['cuda_inference_time']
-            elif params['fitness_metric'] == 'mean_accuracy':
-                return_val[0] = results_dict['mean_eval_accuracy']
-                return_val[1] = results_dict['total_trainable_params']
-                return_val[2] = results_dict['cuda_inference_time']
-            elif params['fitness_metric'] == 'median_accuracy':
-                return_val[0] = results_dict['median_eval_accuracy']
-                return_val[1] = results_dict['total_trainable_params']
-                return_val[2] = results_dict['cuda_inference_time']
             elif params['fitness_metric'] == 'best_loss':
                 return_val[0] = results_dict['fitness_val_loss'] # 1 - best_validation_loss
                 return_val[1] = results_dict['total_trainable_params']
@@ -373,26 +324,14 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
                 raise ValueError(f"Invalid fitness metric: {params['fitness_metric']}")
         LOGGER.info(f"Training of model {id_num} finished, best {params['fitness_metric']}: {round(return_val[0], 2)}")
         
-    except TimeoutError:
-        LOGGER.error("Training timed out. Penalizing the model with accuracy 0.0.")
-        #return_val.value = 0.0
-        return_val[0] = 0.0
-        return_val[1] = 0.0
-        return_val[2] = 0.0
-    except MemoryError:
-        LOGGER.error(f"CUDA out of memory exception, error: {e}")
-        return_val[0] = 0.0
-        return_val[1] = 0.0
-        return_val[2] = 0.0
+    except (TimeoutError, MemoryError) as e:
+        LOGGER.error(f"Exception: {e}")
+        return_val[:] = [0.0, 0.0, 0.0]
     except Exception as e:
         if "out of memory" in str(e):
             LOGGER.error(f"CUDA out of memory exception, error: {e}")
-            return_val[0] = 0.0
-            return_val[1] = 0.0
-            return_val[2] = 0.0
+            return_val[:] = [0.0, 0.0, 0.0]
         else:
             LOGGER.error(f"Exception: {e}")
-            return_val[0] = 0.0
-            return_val[1] = 0.0
-            return_val[2] = 0.0
+            return_val[:] = [0.0, 0.0, 0.0]
         raise e
