@@ -6,6 +6,9 @@ class ModelMetrics:
         self.model = model
         self.device = device
 
+        if next(self.model.parameters()).device != torch.device(self.device):
+            self.model.to(self.device)
+                    
         if 'cuda' in device and torch.cuda.is_available():
             try:
                 import pynvml
