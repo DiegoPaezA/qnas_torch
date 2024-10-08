@@ -49,9 +49,9 @@ class ConfigParameters(object):
             ranges = config_file['QNAS']['params_ranges']
 
             allowed = {'decay': (1e-6, 1.0),
-                       'learning_rate': (1e-6, 1.0),
-                       'momentum': (0.0, 1.0),
-                       'weight_decay': (1e-10, 1e-1)}
+                        'learning_rate': (1e-6, 1.0),
+                        'momentum': (0.0, 1.0),
+                        'weight_decay': (1e-10, 1e-1)}
 
             for key, value in ranges.items():
                 if type(value) is list:
@@ -75,7 +75,7 @@ class ConfigParameters(object):
                 for param in definition['params'].values():
                     if type(param) is not int or param < 0:
                         raise ValueError(f"{name} has an invalid parameter: "
-                                         f"{definition['params']}!")
+                                        f"{definition['params']}!")
 
                 if type(definition['prob']) == str:
                     probs.append(eval(definition['prob']))
@@ -86,42 +86,43 @@ class ConfigParameters(object):
                 probs = np.sum(probs)
                 if probs > 1.0 or 1.0 - probs > 1e-8:
                     raise ValueError("Function probabilities should sum 1.0! "
-                                     "Tolerance of numpy is 1e-8.")
+                                    "Tolerance of numpy is 1e-8.")
 
         vars_dict = {'QNAS': [('crossover_rate', float),
-                              ('max_generations', int),
-                              ('max_num_nodes', int),
-                              ('num_quantum_ind', int),
-                              ('penalize_number', int),
-                              ('repetition', int),
-                              ('replace_method', str),
-                              ('update_quantum_rate', float),
-                              ('update_quantum_gen', int),
-                              ('save_data_freq', int),
-                              ('params_ranges', dict),
-                              ('patience', int),
-                              ('function_dict', dict)],
-                     'train': [('batch_size', int),
-                               ('eval_batch_size', int),
-                               ('max_epochs', int),
-                               ('epochs_to_eval', int),
-                               ('optimizer', str),
-                               ('device', str),
-                               ('dataset', str),
-                               ('mixed_precision', bool),
-                               ('fitness_metric', str),
-                               ('data_augmentation', bool),
-                               ('subtract_mean', bool),
-                               ('save_checkpoints_epochs', int),
-                               ('save_summary_epochs', float),
-                               ('threads', int)]}
+                                ('max_generations', int),
+                                ('max_num_nodes', int),
+                                ('num_quantum_ind', int),
+                                ('penalize_number', int),
+                                ('repetition', int),
+                                ('replace_method', str),
+                                ('update_quantum_rate', float),
+                                ('update_quantum_gen', int),
+                                ('save_data_freq', int),
+                                ('params_ranges', dict),
+                                ('patience', int),
+                                ('function_dict', dict)],
+                    'train': [('batch_size', int),
+                                ('eval_batch_size', int),
+                                ('max_epochs', int),
+                                ('epochs_to_eval', int),
+                                ('optimizer', str),
+                                ('device', str),
+                                ('dataset', str),
+                                ('mixed_precision', bool),
+                                ('fitness_metric', str),
+                                ('mo_metric_base', str),
+                                ('data_augmentation', bool),
+                                ('subtract_mean', bool),
+                                ('save_checkpoints_epochs', int),
+                                ('save_summary_epochs', float),
+                                ('threads', int)]}
 
         for config in vars_dict.keys():
             for item in vars_dict[config]:
                 var = config_file[config].get(item[0])
                 if var is None:
                     raise KeyError(f"Variable \"{config}:{item[0]}\" not found in "
-                                   f"configuration file {self.args['config_file']}")
+                                f"configuration file {self.args['config_file']}")
                 elif type(var) is not item[1]:
                     raise TypeError(f"Variable {item[0]} should be of type {item[1]} but it "
                                     f"is a {type(var)}")
