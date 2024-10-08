@@ -14,9 +14,8 @@ import torch.nn as nn
 from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
 from sklearn.metrics import confusion_matrix
-from cnn import model, input
+from cnn import model, input, metrics
 from util import create_info_file, init_log, load_yaml
-from torch.profiler import profile, record_function, ProfilerActivity
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, MultiStepLR
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
@@ -142,12 +141,12 @@ def evaluate(model, criterion, data_loader, params, test=False):
     return eval_loss, accuracy
 
 def train(model: torch.nn.Module,
-          criterion: torch.nn.Module,
-          optimizer: torch.optim.Optimizer,
-          train_loader: torch.utils.data.DataLoader,
-          val_loader: torch.utils.data.DataLoader,
-          test_loader: torch.utils.data.DataLoader,
-          params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
+        criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        test_loader: torch.utils.data.DataLoader,
+        params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
     """
     Retrain a convolutional neural network model.
 
@@ -239,24 +238,19 @@ def train(model: torch.nn.Module,
     
     create_info_file(params['model_path'], params, 'retraining_params.txt')
     
-        # Measure inference time
-    inference_images = next(iter(test_loader))[0][:10].to(params['device'])
-
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
-        with record_function("model_inference"):
-            best_model_loaded(inference_images)
-
-    model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
-    cpu_inference_time = prof.key_averages()[0].cpu_time
-    cuda_inference_time = prof.key_averages()[0].cuda_time
+    model_metrics = metrics.ModelMetrics(best_model_loaded, device=params['device'])
     
-    total_trainable_params = sum(p.numel() for p in best_model_loaded.parameters() if p.requires_grad)
+    inference_images = next(iter(val_loader))[0][:10].to(params['device'])
+    input_shape = params['input_shape']
     
-    
-    
+    cuda_inference_time = model_metrics.measure_inference_time(inference_images)
+    model_memory_usage = model_metrics.measure_memory(input_shape) / (1024 ** 2)  # Convert bytes to MB
+    total_trainable_params = model_metrics.measure_parameters()
+    total_flops = model_metrics.measure_flops(input_shape)
+        
     training_results['total_trainable_params'] = total_trainable_params
     training_results['cuda_inference_time'] = cuda_inference_time
-    training_results['cpu_inference_time'] = cpu_inference_time
+    training_results['total_flops'] = total_flops
     training_results['model_memory_usage'] = model_memory_usage
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies

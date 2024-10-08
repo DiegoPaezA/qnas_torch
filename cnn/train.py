@@ -27,7 +27,7 @@ current_directory = os.path.dirname(os.path.dirname(__file__))
 log_directory = os.path.join(current_directory, 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
-    
+
 log_file = os.path.join(log_directory, 'train.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
@@ -168,29 +168,23 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     model_memory_usage = model_metrics.measure_memory(input_shape) / (1024 ** 2)  # Convert bytes to MB
     total_trainable_params = model_metrics.measure_parameters()
     total_flops = model_metrics.measure_flops(input_shape)
-    
-    metric_type = params['fitness_metric'] 
-    
-    metric_value = best_accuracy if metric_type == 'accuracy' else best_validation_loss
-    
-    if  params['fitness_metric']  == 'best_accuracy':
+        
+    fitness_metric = params['fitness_metric']
+    mo_base_metric = params['mo_metric_base']
+
+    if fitness_metric == 'best_accuracy' or (fitness_metric == 'scalar_multi_objective' and mo_base_metric == 'accuracy'):
         metric_value = best_accuracy
         metric_type = 'accuracy'
-    elif  params['fitness_metric']  == 'best_loss':
+    elif fitness_metric == 'best_loss' or (fitness_metric == 'scalar_multi_objective' and mo_base_metric == 'loss'):
         metric_value = best_validation_loss
         metric_type = 'loss'
-    elif  params['fitness_metric']  == 'scalar_multi_objective':
-        if metric_type == 'accuracy':
-            metric_value = best_accuracy
-        elif metric_type == 'loss':
-            metric_value = best_validation_loss
-        
-        
+    else:
+        raise ValueError(f"Invalid fitness_metric: {fitness_metric}")   
         
     # Scalarized multi-objective function
     scalar_multi_objective = fitness_utils.mofitness(metric_value=metric_value,params=total_trainable_params,inference_time=cuda_inference_time,
                                     T_p=params['max_params'], T_t=params['max_inference_time'],metric_type=metric_type)
-    
+        
     fitness_val_loss = (1 / (1 + best_validation_loss))*100.0 # Lower loss leads to higher fitness - Reciprocal Transformation
     
     params['total_trainable_params'] = total_trainable_params
@@ -215,7 +209,7 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
     training_results['cuda_inference_time'] = cuda_inference_time # in microseconds
     training_results['model_memory_usage'] = model_memory_usage # in MB
     training_results['total_trainable_params'] = total_trainable_params / 1e6 # in millions
-    training_results['total_flops'] = total_flops
+    training_results['total_flops'] = total_flops / 1e6  # Convert to MFLOPs
     training_results['best_accuracy'] = best_accuracy
     training_results['fitness_val_loss'] = fitness_val_loss
     training_results['scalar_multi_objective'] = scalar_multi_objective        
