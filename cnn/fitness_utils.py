@@ -36,7 +36,7 @@ def mofitness(metric_value, params, inference_time, T_p, T_t, metric_type='accur
     params_factor = params_ratio ** w_p if params_ratio != 0 else 0
     inference_time_factor = inference_time_ratio ** w_t if inference_time_ratio != 0 else 0
 
-    fitness_value = primary_fitness * params_factor * inference_time_factor
+    fitness_value = primary_fitness * params_factor * inference_time_factor # Weighted fitness value
 
-    return fitness_value
+    return fitness_value * 100.0  # Scale fitness value to 0-100
 
