@@ -1,17 +1,17 @@
-# Configuration file 2 - group 1 - 30 layers
+# Configuration file 1 : group 1
 
 QNAS:
     crossover_rate: 0.5
-    max_generations: 300
-    max_num_nodes: 30
-    num_quantum_ind: 5
+    max_generations: 10
+    max_num_nodes: 20
+    num_quantum_ind: 2
     penalize_number: 3
-    repetition: 4
+    repetition: 2
     replace_method: best
     update_quantum_gen: 5
     update_quantum_rate: 0.1
     save_data_freq: 10
-    patience: 10
+    patience: 80
 
     params_ranges:
         decay: 0.9
@@ -54,9 +54,8 @@ train:
     # Tensorflow
     save_checkpoints_epochs: 5
     save_summary_epochs: 0.25
-    threads: 0
+    threads: 4
 
-    # scalarized objective weights
-    acc_weight: 0.8
-    params_weight: 0.1
-    time_weight: 0.1
+    # penalization parameters - scalarized fitness
+    max_params: 114090 # 1.9M
+    max_inference_time: 1000 # us
