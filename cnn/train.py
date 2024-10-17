@@ -41,25 +41,23 @@ def train_epoch(model, criterion, optimizer, data_loader, params, scaler):
     device = torch.device(params['device'])
     amp_device = device.type  # 'cuda' or 'cpu'
     
-    with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
-        for inputs, labels in data_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            
+    for inputs, labels in data_loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+        optimizer.zero_grad()
+        
+        with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
             y_logits = model(inputs)
             if params['task'] == 'multi-class':
                 labels = labels.squeeze().long()
             loss = criterion(y_logits, labels)
-            
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
-            train_loss += loss.item()
-            _, predicted = y_logits.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
-            
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        train_loss += loss.item()
+        _, predicted = y_logits.max(1)
+        total += labels.size(0)
+        correct += predicted.eq(labels).sum().item()
+        
     accuracy = 100 * correct / total
     train_loss /= len(data_loader)
     return train_loss, accuracy
@@ -72,21 +70,22 @@ def evaluate(model, criterion, data_loader, params):
     device = torch.device(params['device'])
     amp_device = device.type  # 'cuda' or 'cpu'
 
-    with torch.no_grad(), torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
+    with torch.no_grad():
         for inputs, labels in data_loader:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-            y_logits = model(inputs)
-            if params['task'] == 'multi-class':
-                labels = labels.squeeze().long()  # For datasets like MedMNIST
-            loss = criterion(y_logits, labels)
+            inputs, labels = inputs.to(device), labels.to(device)
+            with torch.autocast(device_type=amp_device, dtype=torch.float16, enabled=params['mixed_precision']):
+                y_logits = model(inputs)
+                if params['task'] == 'multi-class':
+                    labels = labels.squeeze().long() # medmnist
+                loss = criterion(y_logits, labels)
             validation_loss += loss.item()
             _, predicted = y_logits.max(1)
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
 
-    accuracy = 100.0 * correct / total
+    accuracy = 100 * correct / total
     validation_loss /= len(data_loader)
+
     return validation_loss, accuracy
 
 def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.optim.Optimizer, 
