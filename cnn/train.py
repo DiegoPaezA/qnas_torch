@@ -274,7 +274,8 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     # Add the fully connected layer to the model
     input_shape =  [params['batch_size']] + dataset_info['shape']
     inputs = torch.randn(input_shape)
-    _ = model_net(inputs)
+    with torch.no_grad():
+        _ = model_net(inputs)
     model_net.to(device)
     
     params['input_shape'] = input_shape
