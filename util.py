@@ -4,6 +4,8 @@ import pickle as pkl
 import os
 import re
 import json
+import copy
+
 import time
 import matplotlib.pyplot as plt
 from shutil import rmtree
@@ -14,6 +16,12 @@ import torchvision.datasets
 from torchvision.transforms import ToTensor
 import medmnist
 from medmnist import INFO
+
+import gc
+import torch
+import torch.cuda as cuda
+from cnn import model, input, metrics, fitness_utils
+
 
 def natural_key(string):
     """ Key to use with sort() in order to sort string lists in natural order.
@@ -87,6 +95,7 @@ def check_file_exists(file_path):
         return True
     else:
         return False
+
 def load_retrain_results(experiment_path, retrain_file_name):
     file_path = os.path.join(experiment_path, retrain_file_name)
     with open(file_path, 'r') as f:
@@ -108,7 +117,7 @@ def test_acc_mean_std(experiment_path, retrain_file_name):
     retrain_data = load_retrain_results(experiment_path, retrain_file_name)
     test_acc_mean = np.mean([retrain_data[key]['test_accuracy'] for key in retrain_data.keys()])
     test_acc_std = np.std([retrain_data[key]['test_accuracy'] for key in retrain_data.keys()])
-      
+    
     return test_acc_mean, test_acc_std    
 
 def agg_results(results_dict):
@@ -264,7 +273,7 @@ def delete_old_dirs(path, keep_best=False, best_id=''):
     """
 
     folders = [os.path.join(path, d) for d in os.listdir(path)
-               if os.path.isdir(os.path.join(path, d)) and d[0].isdigit()]
+                if os.path.isdir(os.path.join(path, d)) and d[0].isdigit()]
     folders.sort(key=natural_key)
 
     if keep_best and best_id:
@@ -281,7 +290,7 @@ def check_files(exp_path):
     """
     if not os.path.exists(exp_path):
         raise OSError('User must provide a valid \"--experiment_path\" to continue '
-                      'evolution or to retrain a model.')
+                    'evolution or to retrain a model.')
     experiment_folders = [f.name for f in os.scandir(exp_path) if f.is_dir()]
     best_result_folder = [name for name in experiment_folders if name[0].isdigit()]
     best_result_folder = os.path.join(exp_path, best_result_folder[0])
@@ -324,7 +333,7 @@ def init_log(log_level, name, file_path=None):
         handler = logging.FileHandler(file_path)
 
     formatter = logging.Formatter('%(levelname)s: %(module)s: %(asctime)s.%(msecs)03d '
-                                  '- %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                                '- %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
@@ -386,7 +395,7 @@ def calculate_time(start_time, elapse_time,current_gen:int=0, max_generations:in
 
     Returns:
     tuple: If end_evol is True, returns a tuple (hours, minutes) representing the elapsed time.
-           If end_evol is False, returns a tuple (hours, minutes, remaining_total_hours, remaining_total_minutes) representing the elapsed time and the estimated remaining time.
+        If end_evol is False, returns a tuple (hours, minutes, remaining_total_hours, remaining_total_minutes) representing the elapsed time and the estimated remaining time.
     """
     
     total_time = elapse_time - start_time
@@ -409,8 +418,8 @@ def download_dataset(params: dict):
 
     Parameters:
     - params (dict): A dictionary containing the parameters for the dataset.
-      - 'data_path' (str): The path where the dataset should be stored.
-      - 'dataset' (str): The name of the dataset to be downloaded.
+        - 'data_path' (str): The path where the dataset should be stored.
+        - 'dataset' (str): The name of the dataset to be downloaded.
 
     If the dataset directory specified by 'data_path' does not exist, it will be created, 
     and the dataset will be downloaded. The function supports downloading datasets from 
@@ -440,4 +449,127 @@ def download_dataset(params: dict):
         else:
             raise ValueError(f"Dataset class {dataset_name} not found in torchvision.datasets or available_datasets.")
     else:
-        print(f"Dataset {dataset_name} already downloaded.")    
+        print(f"Dataset {dataset_name} already downloaded.")
+
+def build_model(decoded_net, train_params):
+    """
+    Build the model based on the decoded network architecture and training parameters.
+
+    Parameters:
+    - decoded_net: The network architecture definition.
+    - train_params: Dictionary containing training parameters.
+
+    Returns:
+    - model_instance: The constructed model ready for training.
+    """
+    # Load data info
+    dataset_name = train_params['dataset'].lower()
+    if dataset_name in input.available_datasets:
+        dataset_info = input.available_datasets[dataset_name]
+    else:
+        dataset_info_path = os.path.join(train_params['data_path'], 'data_info.txt')
+        dataset_info = load_yaml(dataset_info_path)
+
+    # Update train_params with dataset info
+    train_params['num_classes'] = dataset_info['num_classes']
+    train_params['task'] = dataset_info['task']
+    train_params['input_shape'] = [train_params['batch_size']] + dataset_info['shape']
+
+    # Check if 'cbam' is a key in the fn_dict
+    has_cbam_key = any(key.startswith('cbam') for key in train_params['fn_dict'])
+
+    # Filter fn_dict to include only keys present in decoded_net
+    filtered_fn_dict = {
+        key: item for key, item in train_params['fn_dict'].items() if key in decoded_net
+    }
+
+    # Create the model
+    model_instance = model.NetworkGraph(num_classes=dataset_info['num_classes'])
+    model_instance.create_functions(
+        fn_dict=filtered_fn_dict, net_list=decoded_net, cbam=has_cbam_key
+    )
+
+    input_random = torch.randn(train_params['input_shape'])
+    with torch.no_grad():
+        _ = model_instance(input_random)
+
+    return model_instance
+
+def estimate_model_memory(decoded_net, train_params, fn_dict):
+    """
+    Estimate the GPU memory required to train a model for one iteration.
+
+    Parameters:
+    - decoded_net: The network architecture definition.
+    - train_params: Dictionary containing training parameters.
+    - fn_dict: Dictionary containing the function definitions.
+
+    Returns:
+    - peak_memory: Estimated peak GPU memory usage in bytes.
+    """
+    train_params_copy = copy.deepcopy(train_params)
+    train_params_copy['fn_dict'] = fn_dict
+
+    # Ensure CUDA is available
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. Memory estimation requires a GPU.")
+
+    device = train_params_copy.get('device', torch.device('cuda'))
+    train_params_copy['device'] = device  # Ensure the device is updated in train_params_copy
+
+    # Build the model
+    model_instance = build_model(decoded_net, train_params_copy)
+    model_instance.to(device)
+    model_instance.train()  # Set model to training mode
+
+    # Generate dummy input data
+    dummy_input = torch.randn(train_params_copy['input_shape'], device=device)
+
+    # Create dummy target tensor
+    batch_size = train_params_copy['batch_size']
+    num_classes = train_params_copy['num_classes']
+    dummy_target = torch.randint(0, num_classes, (batch_size,), device=device)
+
+    # Define loss function
+    criterion = torch.nn.CrossEntropyLoss().to(device)
+
+    # Define optimizer (use the same optimizer as in your training)
+    optimizer = torch.optim.SGD(model_instance.parameters(), lr=0.01)
+
+    # Instantiate the GradScaler
+    scaler = torch.cuda.amp.GradScaler()
+
+    # Clear cache and reset memory stats
+    cuda.empty_cache()
+    cuda.reset_peak_memory_stats(device=device)
+
+    try:
+        optimizer.zero_grad()
+
+        with torch.cuda.amp.autocast():
+            # Forward pass
+            outputs = model_instance(dummy_input)
+            loss = criterion(outputs, dummy_target)
+
+        # Backward pass with scaled loss
+        scaler.scale(loss).backward()
+
+        # Optimizer step
+        scaler.step(optimizer)
+
+        # Update the scaler
+        scaler.update()
+
+        # Synchronize and get peak memory usage
+        cuda.synchronize()
+        peak_memory = cuda.max_memory_allocated(device=device)
+    except Exception as e:
+        print(f"Error during memory estimation: {e}")
+        peak_memory = None
+    finally:
+        # Clean up to free memory
+        del model_instance, dummy_input, dummy_target, outputs, loss, optimizer
+        gc.collect()
+        cuda.empty_cache()
+
+    return peak_memory
