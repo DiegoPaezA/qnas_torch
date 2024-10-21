@@ -42,7 +42,7 @@ def main(**args):
         logger.info(f"Retraining {experiment_path} repetition {i} ...")
         start_time = time.perf_counter()
         results_dict = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
-                             train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)    
+                            train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)    
         config.train_spec['experiment_path'] = os.path.join(experiment_path, f"retrain_{config_code}_{i+1}")
         
         end_time = time.perf_counter()
