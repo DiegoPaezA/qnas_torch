@@ -26,17 +26,39 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'retrain.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
-def realese_gpu_memory(gpu_name='cuda:0'):
+def release_gpu_memory(gpu_name='cuda:0'):
     """
     Release GPU memory.
+    
+    Args:
+        gpu_name (str): The name of the GPU device (default is 'cuda').
     """
-    # Set the device to GPU named "cuda:1"
-    torch.cuda.set_device(gpu_name)
+    if not torch.cuda.is_available():
+        print("CUDA is not available. No GPU memory to release.")
+        return
+    
+    if gpu_name == 'cuda':
+        gpu_name = 'cuda:0'
+
+    device = torch.device(gpu_name)
+    torch.cuda.set_device(device)
+
+    # Obtener el uso de memoria antes de limpiar la caché
+    memory_allocated_before = torch.cuda.memory_allocated(device)
+    memory_reserved_before = torch.cuda.memory_reserved(device)
+
+    # Limpiar la caché
     torch.cuda.empty_cache()
 
-    # Print memory statistics
-    #print(f"Allocated GPU memory: {torch.cuda.memory_allocated() / (1024 ** 3):.2f} GB")
-    #print(f"Reserved GPU memory: {torch.cuda.memory_reserved() / (1024 ** 3):.2f} GB")
+    # Obtener el uso de memoria después de limpiar la caché
+    memory_allocated_after = torch.cuda.memory_allocated(device)
+    memory_reserved_after = torch.cuda.memory_reserved(device)
+
+    # Verificar si hubo un cambio significativo
+    if memory_allocated_before != memory_allocated_after or memory_reserved_before != memory_reserved_after:
+        print("Cache was cleared.")
+    else:
+        print("Cache was already empty.")
 
 def compute_metrics(model, data_loader, params):
     model.eval()
@@ -74,7 +96,8 @@ def reset_and_load_best_model(params, best_model_path):
     best_model.create_functions(fn_dict=filtered_dict, net_list=params['net_list'])
 
     input_random = torch.randn(params['input_shape'])
-    _ = best_model(input_random)
+    with torch.no_grad():
+        _ = best_model(input_random)
     # Load the state dictionary of the best model into the new model
     best_model.load_state_dict(torch.load(best_model_path))
     best_model.to(params['device'])
@@ -218,7 +241,7 @@ def train(model: torch.nn.Module,
             torch.save(model.state_dict(), best_model_path)
             create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
 
-        if epoch % 50 == 0:
+        if epoch % 10 == 0:
             LOGGER.info(f"Experiment: {params['experiment_path']} - Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss:.2f} - Validation loss: {validation_loss:.2f} - Validation accuracy: {accuracy:.2f}%")
             #print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
@@ -356,6 +379,6 @@ def train_and_eval(params: Dict[str, Any],
             LOGGER.error(f"An error occurred during training: {e}")
             results_dict = None
     
-    realese_gpu_memory(gpu_name=params['device'])
+    release_gpu_memory(gpu_name=params['device'])
     
     return results_dict

@@ -27,17 +27,36 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'retrain_resnet.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
-def realese_gpu_memory(gpu_name='cuda:0'):
+def release_gpu_memory(gpu_name='cuda'):
     """
     Release GPU memory.
+    
+    Args:
+        gpu_name (str): The name of the GPU device (default is 'cuda').
     """
-    # Set the device to GPU named "cuda:1"
-    torch.cuda.set_device(gpu_name)
+    if not torch.cuda.is_available():
+        print("CUDA is not available. No GPU memory to release.")
+        return
+
+    device = torch.device(gpu_name)
+    torch.cuda.set_device(device)
+
+    # Obtener el uso de memoria antes de limpiar la caché
+    memory_allocated_before = torch.cuda.memory_allocated(device)
+    memory_reserved_before = torch.cuda.memory_reserved(device)
+
+    # Limpiar la caché
     torch.cuda.empty_cache()
 
-    # Print memory statistics
-    #print(f"Allocated GPU memory: {torch.cuda.memory_allocated() / (1024 ** 3):.2f} GB")
-    #print(f"Reserved GPU memory: {torch.cuda.memory_reserved() / (1024 ** 3):.2f} GB")
+    # Obtener el uso de memoria después de limpiar la caché
+    memory_allocated_after = torch.cuda.memory_allocated(device)
+    memory_reserved_after = torch.cuda.memory_reserved(device)
+
+    # Verificar si hubo un cambio significativo
+    if memory_allocated_before != memory_allocated_after or memory_reserved_before != memory_reserved_after:
+        print("Cache was cleared.")
+    else:
+        print("Cache was already empty.")
 
 def compute_metrics(model, data_loader, params):
     model.eval()
@@ -355,6 +374,6 @@ def train_and_eval(params: Dict[str, Any],
             LOGGER.error(f"An error occurred during training: {e}")
             results_dict = None
     
-    realese_gpu_memory(gpu_name=params['device'])
+    release_gpu_memory(gpu_name=params['device'])
     
     return results_dict
