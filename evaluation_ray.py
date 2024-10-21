@@ -55,7 +55,10 @@ def run_individual(model_id, train_params, fn_dict, decoded_net, decoded_params)
             'error_msg': str(e)
         }
     finally:
-        torch.cuda.empty_cache()
+        memory_allocated_before = torch.cuda.memory_allocated()
+        memory_reserved_before = torch.cuda.memory_reserved()
+        if memory_allocated_before > 0 or memory_reserved_before > 0:
+            torch.cuda.empty_cache()
 
     return result
 
