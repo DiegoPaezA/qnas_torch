@@ -8,9 +8,19 @@ fitness_metric="best_loss"
 data_path="${dataset}_data"
 log_level="INFO"
 
-configs=("config3.txt" "config4.txt" "config6.txt" "config7.txt" "config10.txt")
-exps=("exp1" "exp2" "exp3" "exp4" "exp5")
-cuda_devices=("0,1" "0,1" "0,1" "0,1" "0,1")
+
+CUDA_VISIBLE_DEVICES="0,1" python run_evolution.py \
+    --experiment_path "${exp_path_base}/exp2_repeat_3" \
+    --config_file "${config_file}/config4.txt" \
+    --data_path "$data_path" \
+    --dataset "$dataset" \
+    --fitness_metric "$fitness_metric" \
+    --data_augmentation \
+    --log_level "$log_level"
+
+configs=("config6.txt" "config7.txt" "config10.txt")
+exps=("exp3" "exp4" "exp5")
+cuda_devices=("0,1" "0,1" "0,1")
 
 # Loop over the length of the configs array
 for ((j=0; j<${#configs[@]}; j++)); do
@@ -36,7 +46,7 @@ done
 
 
 dataset="atleta_coronal"
-exp_path_base="experiments_${dataset}aug"
+exp_path_base="experiments_${dataset}_aug"
 config_file="config_files_atleta"
 fitness_metric="best_loss"
 data_path="${dataset}_data"
