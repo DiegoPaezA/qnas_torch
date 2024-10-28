@@ -2,16 +2,16 @@
 
 QNAS:
     crossover_rate: 0.5
-    max_generations: 10
+    max_generations: 300
     max_num_nodes: 20
-    num_quantum_ind: 2
+    num_quantum_ind: 4
     penalize_number: 3
     repetition: 2
     replace_method: best
     update_quantum_gen: 5
     update_quantum_rate: 0.1
     save_data_freq: 10
-    patience: 80
+    patience: 60
 
     params_ranges:
         decay: 0.9
