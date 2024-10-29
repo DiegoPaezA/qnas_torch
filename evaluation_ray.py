@@ -11,6 +11,7 @@ import torch.multiprocessing as mp
 from typing import Dict, Any, List
 from cnn import train, input
 from util import init_log, estimate_model_memory
+import random
 
 
 @ray.remote
@@ -55,9 +56,9 @@ def run_individual(model_id, train_params, fn_dict, decoded_net, decoded_params)
             'error_msg': str(e)
         }
     finally:
-        memory_allocated_before = torch.cuda.memory_allocated()
-        memory_reserved_before = torch.cuda.memory_reserved()
-        if memory_allocated_before > 0 or memory_reserved_before > 0:
+        del train_loader, val_loader
+        torch.cuda.synchronize()  # Wait for all pending operations to complete
+        if torch.cuda.memory_allocated() > 0 or torch.cuda.memory_reserved() > 0:
             torch.cuda.empty_cache()
 
     return result
@@ -68,11 +69,12 @@ class EvalPopulation(object):
         self.fn_dict = fn_dict
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
-        self.loader = input.GenericDataLoader(params=self.train_params)
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")
 
-        # Initialize Ray
-        ray.init()
+        # Initialize Ray once
+        if not ray.is_initialized():
+            ray.init(ignore_reinit_error=True)  # Use ignore_reinit_error to prevent issues in notebooks or during testing
+
 
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
         pop_size = len(decoded_nets)
@@ -133,7 +135,9 @@ class EvalPopulation(object):
         time_elapsed_sec = (evol_end - evol_time_start) % 60
         self.logger.info(f"Time elapsed for {pop_size} individuals: {time_elapsed_min:.0f}m {time_elapsed_sec:.0f}s")
 
-        # Shutdown Ray
-        ray.shutdown()
-
         return evaluations
+    
+    def __del__(self):
+        # Shutdown Ray when the object is destroyed
+        if ray.is_initialized():
+            ray.shutdown()

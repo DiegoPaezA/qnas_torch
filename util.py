@@ -175,14 +175,14 @@ def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=Fals
             agg_results_dict = agg_results(results_dict)
             ax[0].plot(epochs, agg_results_dict["mean_training_losses"], label='Training', color='blue')
             ax[0].fill_between(epochs, 
-                               agg_results_dict["mean_training_losses"] - agg_results_dict["std_training_losses"], 
-                               agg_results_dict["mean_training_losses"] + agg_results_dict["std_training_losses"], 
-                               color='blue', alpha=0.2)
+                                agg_results_dict["mean_training_losses"] - agg_results_dict["std_training_losses"], 
+                                agg_results_dict["mean_training_losses"] + agg_results_dict["std_training_losses"], 
+                                color='blue', alpha=0.2)
             ax[0].plot(epochs, agg_results_dict["mean_validation_losses"], label='Validation', color='red')
             ax[0].fill_between(epochs, 
-                               agg_results_dict["mean_validation_losses"] - agg_results_dict["std_validation_losses"], 
-                               agg_results_dict["mean_validation_losses"] + agg_results_dict["std_validation_losses"], 
-                               color='red', alpha=0.2)
+                                agg_results_dict["mean_validation_losses"] - agg_results_dict["std_validation_losses"], 
+                                agg_results_dict["mean_validation_losses"] + agg_results_dict["std_validation_losses"], 
+                                color='red', alpha=0.2)
             ax[0].set_title('Loss')
             ax[0].set_xlabel('Epochs')
             ax[0].set_ylabel('Loss')
@@ -193,14 +193,14 @@ def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=Fals
             
             ax[1].plot(epochs, agg_results_dict["mean_training_accuracies"], label='Training', color='blue')
             ax[1].fill_between(epochs, 
-                               agg_results_dict["mean_training_accuracies"] - agg_results_dict["std_training_accuracies"], 
-                               agg_results_dict["mean_training_accuracies"] + agg_results_dict["std_training_accuracies"], 
-                               color='blue', alpha=0.2)
+                                agg_results_dict["mean_training_accuracies"] - agg_results_dict["std_training_accuracies"], 
+                                agg_results_dict["mean_training_accuracies"] + agg_results_dict["std_training_accuracies"], 
+                                color='blue', alpha=0.2)
             ax[1].plot(epochs, agg_results_dict["mean_validation_accuracies"], label='Validation', color='red')
             ax[1].fill_between(epochs, 
-                               agg_results_dict["mean_validation_accuracies"] - agg_results_dict["std_validation_accuracies"], 
-                               agg_results_dict["mean_validation_accuracies"] + agg_results_dict["std_validation_accuracies"], 
-                               color='red', alpha=0.2)
+                                agg_results_dict["mean_validation_accuracies"] - agg_results_dict["std_validation_accuracies"], 
+                                agg_results_dict["mean_validation_accuracies"] + agg_results_dict["std_validation_accuracies"], 
+                                color='red', alpha=0.2)
             
             ax[1].axhline(y=test_acc_mean, color='green', linestyle='--', label='Test Accuracy')
             ax[1].text(epochs[-2], test_acc_mean+1, f'{test_acc_mean:.2f} ± {test_acc_std:.2f}', ha='right', va='center', color='black', fontsize=14)
@@ -300,7 +300,7 @@ def check_files(exp_path):
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:
             raise OSError('User must provide an \"--experiment_path\" with a valid data file to '
-                          'continue evolution or to retrain a model.')
+                        'continue evolution or to retrain a model.')
     else:
         raise OSError('training_params.txt not found!')
 
@@ -309,7 +309,7 @@ def check_files(exp_path):
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:
             raise OSError('User must provide an \"--experiment_path\" with a valid config_file '
-                          'to continue evolution or to retrain a model.')
+                        'to continue evolution or to retrain a model.')
     else:
         raise OSError('log_params_evolution.txt not found!')
     
@@ -568,7 +568,8 @@ def estimate_model_memory(decoded_net, train_params, fn_dict):
         peak_memory = None
     finally:
         # Clean up to free memory
-        del model_instance, dummy_input, dummy_target, outputs, loss, optimizer
+        torch.cuda.synchronize()
+        del model_instance, dummy_input, dummy_target, outputs, loss, optimizer, scaler, criterion, train_params_copy
         gc.collect()
         cuda.empty_cache()
 
