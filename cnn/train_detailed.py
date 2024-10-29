@@ -43,14 +43,14 @@ def release_gpu_memory(gpu_name='cuda:0'):
     device = torch.device(gpu_name)
     torch.cuda.set_device(device)
 
-    # Obtener el uso de memoria antes de limpiar la caché
+    # Get memory usage before clearing the cache
     memory_allocated_before = torch.cuda.memory_allocated(device)
     memory_reserved_before = torch.cuda.memory_reserved(device)
 
-    # Limpiar la caché
+    # Clear the cache
     torch.cuda.empty_cache()
 
-    # Obtener el uso de memoria después de limpiar la caché
+    # Check if there was a significant change
     memory_allocated_after = torch.cuda.memory_allocated(device)
     memory_reserved_after = torch.cuda.memory_reserved(device)
 
@@ -119,11 +119,7 @@ def train_epoch(model, criterion, optimizer, data_loader, params):
             labels = labels.squeeze().long() # medmnist
             
         loss = criterion(y_logits, labels)
-        loss.backward()
-        
-        # Apply gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
+        loss.backward()       
         optimizer.step()
         train_loss += loss.item()
         _, predicted = y_logits.max(1)
@@ -236,18 +232,18 @@ def train(model: torch.nn.Module,
         validation_losses.append(validation_loss)
         validation_accuracies.append(accuracy)
         
-        if accuracy > best_accuracy and  epoch % params['save_checkpoints_epochs'] == 0: 
+        if accuracy > best_accuracy: 
             best_accuracy = accuracy
             torch.save(model.state_dict(), best_model_path)
             create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
 
-        if epoch % 10 == 0:
+        if epoch % 25 == 0:
             LOGGER.info(f"Experiment: {params['experiment_path']} - Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss:.2f} - Validation loss: {validation_loss:.2f} - Validation accuracy: {accuracy:.2f}%")
             #print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
         if lr_scheduler is not None:
             if params['lr_scheduler'] == 'reduce_on_plateau':
-                lr_scheduler.step(accuracy)                
+                lr_scheduler.step(validation_loss)                
             else:
                 lr_scheduler.step()
         
@@ -328,7 +324,7 @@ def train_and_eval(params: Dict[str, Any],
     
     LOGGER.info(f"Start retraining of the experiment: {params['experiment_path']}")
     # Load data information
-    if hasattr(input.available_datasets, params['dataset'].lower()):
+    if params['dataset'].lower() in input.available_datasets:
         dataset_info = input.available_datasets[params['dataset'].lower()]
     else:
         dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
@@ -371,13 +367,17 @@ def train_and_eval(params: Dict[str, Any],
     
     try:
         results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params)
-    except Exception as e:
+    except RuntimeError as e:
         if "out of memory" in str(e):
             LOGGER.error(f"Out of memory error: {e}")
             results_dict = None
+            release_gpu_memory(gpu_name=params['device'])
         else:
-            LOGGER.error(f"An error occurred during training: {e}")
-            results_dict = None
+            LOGGER.error(f"Runtime error during training: {e}")
+            raise
+    except Exception as e:
+        LOGGER.error(f"An unexpected error occurred during training: {e}")
+        raise
     
     release_gpu_memory(gpu_name=params['device'])
     
