@@ -45,7 +45,7 @@ class QPopulationParams(QPopulation):
     """ QNAS Chromosomes for the hyperparameters to be evolved. """
 
     def __init__(self, num_quantum_ind, params_ranges, repetition, crossover_rate,
-                 update_quantum_rate):
+                update_quantum_rate):
         """ Initialize QPopulationParams.
 
         Args:
@@ -136,7 +136,7 @@ class QPopulationNetwork(QPopulation):
     """ QNAS Chromosomes for the networks to be evolved. """
 
     def __init__(self, num_quantum_ind, max_num_nodes, repetition, update_quantum_rate,
-                 fn_list, initial_probs):
+                fn_list, initial_probs,crossover_method='hux'):
         """ Initialize QPopulationNetwork.
 
         Args:
@@ -152,7 +152,7 @@ class QPopulationNetwork(QPopulation):
         """
 
         super(QPopulationNetwork, self).__init__(num_quantum_ind, repetition,
-                                                 update_quantum_rate)
+                                                update_quantum_rate)
         self.probabilities = None
 
         self.max_update = 0.05
@@ -161,6 +161,7 @@ class QPopulationNetwork(QPopulation):
         self.chromosome = QChromosomeNetwork(max_num_nodes, fn_list, self.dtype)
 
         self.initial_probs = self.chromosome.initialize_qgenes(initial_probs=initial_probs)
+        self.crossover_method = crossover_method  # Crossover method selection
         self.initialize_qpop()
 
     def initialize_qpop(self):
@@ -168,7 +169,7 @@ class QPopulationNetwork(QPopulation):
 
         # Shape = (num_ind, num_nodes, num_functions)
         self.probabilities = np.tile(self.initial_probs, (self.num_ind,
-                                                          self.chromosome.num_genes, 1))
+                                                        self.chromosome.num_genes, 1))
 
     def generate_classical(self):
         """ Generate a specific number of classical individuals from the observation of quantum
@@ -180,7 +181,7 @@ class QPopulationNetwork(QPopulation):
 
         size = self.chromosome.num_functions
         new_pop = np.zeros(shape=(self.num_ind * self.repetition, self.chromosome.num_genes),
-                           dtype=np.int32)
+                            dtype=np.int32)
 
         temp_prob = np.tile(self.probabilities, (self.repetition, 1, 1))
         
@@ -189,6 +190,52 @@ class QPopulationNetwork(QPopulation):
                 new_pop[ind, node] = sample(ind, node)
 
         return new_pop
+    
+    def hux_crossover(self, parent1, parent2):
+        """ Perform Half Uniform Crossover (HUX) between two parent chromosomes. """
+        differing_indices = np.where(parent1 != parent2)[0]
+        num_swaps = len(differing_indices) // 2
+        swap_indices = np.random.choice(differing_indices, num_swaps, replace=False)
+        offspring1, offspring2 = parent1.copy(), parent2.copy()
+        offspring1[swap_indices], offspring2[swap_indices] = parent2[swap_indices], parent1[swap_indices]
+        return offspring1, offspring2
+
+    def uniform_crossover(self, parent1, parent2):
+        """ Perform Uniform Crossover with a crossover mask between two parent chromosomes. """
+        chromosome_length = len(parent1)
+        crossover_mask = np.random.randint(0, 2, size=chromosome_length).astype(bool)
+        offspring1, offspring2 = parent1.copy(), parent2.copy()
+        offspring1[crossover_mask], offspring2[crossover_mask] = parent2[crossover_mask], parent1[crossover_mask]
+        return offspring1, offspring2
+
+    def apply_crossover(self, best_current_pop, new_pop):
+        """ Apply the selected crossover method between best individuals of the current and new populations. 
+        
+        Args:
+            best_current_pop: numpy array representing the best individuals from the current population.
+            new_pop: numpy array representing the new population.
+        
+        Returns:
+            A population of offspring resulting from the selected crossover method.
+        """
+        offspring = []
+        for parent1, parent2 in zip(best_current_pop, new_pop):
+            if self.crossover_method == 'hux':
+                child1, child2 = self.hux_crossover(parent1, parent2)
+            elif self.crossover_method == 'uniform':
+                child1, child2 = self.uniform_crossover(parent1, parent2)
+            else:
+                raise ValueError(f"Unknown crossover method: {self.crossover_method}")
+            offspring.extend([child1, child2])
+
+        return np.array(offspring[:len(new_pop)])  # Ensure offspring size matches new_pop size
+
+    def set_crossover_method(self, method):
+        """ Set the crossover method for this population. """
+        if method in ['hux', 'uniform']:
+            self.crossover_method = method
+        else:
+            raise ValueError(f"Unknown crossover method: {method}")
 
     def _update(self, chromosomes, idx, update_value):
         """ Modify *chromosomes* by adding *update_value* to the genes indicated by *idx* and
