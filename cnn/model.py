@@ -149,7 +149,7 @@ class SEBlock(nn.Module):
         x_se = F.relu(self.fc1(x_se))
         x_se = torch.sigmoid(self.fc2(x_se))
         return x * x_se
-   
+
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
 
@@ -575,12 +575,12 @@ class ResidualV1(nn.Module):
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
-                               kernel_size=self.kernel_size,stride=strides, 
-                               padding=self.padding, bias=False)
+                                kernel_size=self.kernel_size,stride=strides, 
+                                padding=self.padding, bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
-                               kernel_size=self.kernel_size, stride=1, 
-                               padding=self.padding, bias=False)
+                                kernel_size=self.kernel_size, stride=1, 
+                                padding=self.padding, bias=False)
         self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
         self.projection = nn.Sequential(
@@ -646,12 +646,12 @@ class ResidualV1CBAM(nn.Module):
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
+                                kernel_size=self.kernel_size,stride=strides, 
+                                padding= self.padding ,bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
+                                kernel_size=self.kernel_size,stride=strides, 
+                                padding= self.padding ,bias=False)
         self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
         init.kaiming_normal_(self.conv1.weight,nonlinearity='relu')  # He Normal initialization
@@ -729,12 +729,12 @@ class ResidualV1Pr(nn.Module):
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
+                                kernel_size=self.kernel_size,stride=strides, 
+                                padding= self.padding ,bias=False)
         self.bn1 = nn.BatchNorm2d(num_features=self.filters)
         self.conv2 = nn.Conv2d(in_channels=filters, out_channels=filters, 
-                              kernel_size=self.kernel_size,stride=strides, 
-                              padding= self.padding ,bias=False)
+                                kernel_size=self.kernel_size,stride=strides, 
+                                padding= self.padding ,bias=False)
         self.bn2 = nn.BatchNorm2d(num_features=self.filters)
         
         init.kaiming_normal_(self.conv1.weight, mode='fan_out', nonlinearity='relu')  # He Normal initialization
@@ -800,8 +800,8 @@ class MaxPooling(nn.Module):
         self.channels_last = channels_last
 
         self.max_pool = nn.MaxPool2d(kernel_size=self.kernel, 
-                                     stride=self.strides, 
-                                     padding=self.padding)
+                                    stride=self.strides, 
+                                    padding=self.padding)
 
     def forward(self, inputs):
         """ Max Pooling layer.
@@ -846,8 +846,8 @@ class AvgPooling(nn.Module):
         self.channels_last = channels_last
 
         self.avg_pool = nn.AvgPool2d(kernel_size=self.kernel, 
-                                     stride=self.strides, 
-                                     padding=self.padding)
+                                    stride=self.strides, 
+                                    padding=self.padding)
 
     def forward(self, inputs):
         """ Average Pooling layer.
@@ -911,21 +911,20 @@ class NoOp(nn.Module):
     pass
 
 functions_dict = {'ConvBlock': ConvBlock,
-                  'DWConvBlock': DWConvBlock,
-                  'SEConvBlock': SEConvBlock,
-                  'MBConv': MBConv,
-                  'MBConvV2': MBConv_V2,
-                  'MBEPPGA': MBConv_EPPGA,
-                  'ResidualV1': ResidualV1,
-                  'ResidualV1Pr': ResidualV1Pr,
-                  'CBAMConvBlock': CBAMConvBlock,
-                  'ResidualV1CBAM': ResidualV1CBAM,
-                  'CBAMBlock' : CBAMBlock,
-                  'MaxPooling': MaxPooling,
-                  'AvgPooling': AvgPooling,
-                  'FullyConnected': FullyConnected,
-                  'no_op': NoOp}
- 
+                    'DWConvBlock': DWConvBlock,
+                    'SEConvBlock': SEConvBlock,
+                    'MBConv': MBConv,
+                    'MBConvV2': MBConv_V2,
+                    'MBEPPGA': MBConv_EPPGA,
+                    'ResidualV1': ResidualV1,
+                    'ResidualV1Pr': ResidualV1Pr,
+                    'CBAMConvBlock': CBAMConvBlock,
+                    'ResidualV1CBAM': ResidualV1CBAM,
+                    'CBAMBlock' : CBAMBlock,
+                    'MaxPooling': MaxPooling,
+                    'AvgPooling': AvgPooling,
+                    'FullyConnected': FullyConnected,
+                    'no_op': NoOp}
 
 class NetworkGraph(nn.Module):
     def __init__(self, num_classes, mu=0.9, epsilon=2e-5, in_channels=3):
@@ -936,9 +935,8 @@ class NetworkGraph(nn.Module):
                 number of classes for classification model.
             mu: float
                 batch normalization decay; default = 0.9
-            epsilon: float 
-             
-                   batch normalization epsilon; default = 2e-5.
+            epsilon: float  
+                batch normalization epsilon; default = 2e-5.
         Returns:
             output logits tensor.
         """
@@ -977,7 +975,7 @@ class NetworkGraph(nn.Module):
             
             if parameters['function'] in ['CBAMBlock']:
                 parameters['params']['in_channels'] = in_channels
-   
+
             self.layers.append(functions_dict[parameters['function']](**parameters['params']))
         self.model = nn.Sequential(*self.layers)
         self.fc = None
