@@ -72,9 +72,11 @@ if __name__ == '__main__':
                         choices=['best_accuracy', 'best_loss', 'scalar_multi_objective'],
                         help='Fitness metric to be used during evolution. Default = accuracy.')
     parser.add_argument('--data_augmentation', action='store_true',
-                    help='Disable data augmentation during training. Default = False.')
+                    help='Enable data augmentation during training. Default = False.')
     parser.add_argument('--early_stopping', action='store_true',
-                    help='Disable data augmentation during training. Default = False.')
+                    help='Enable evolutionary early stopping. Default = False.')
+    parser.add_argument('--en_pop_crossover', action='store_true',
+                    help='Enable population crossover during evolution. Default = False.') 
     parser.add_argument('--save_checkpoints_epochs', type=int, default=5,
                         help='Number of epochs to save the model. Default = 5.')
 
