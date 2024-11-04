@@ -62,7 +62,7 @@ def run_individual(model_id: str, train_params: Dict[str, Any], fn_dict: Dict[st
             'fitness': return_val[0],
             'params': return_val[1],
             'inference_time': return_val[2],
-            'status': 'success'
+            'status': 'success' if all(value != 0.0 for value in return_val) else 'error'
         }
     except Exception as e:
         result = {
