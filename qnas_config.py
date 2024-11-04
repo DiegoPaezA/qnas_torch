@@ -100,6 +100,9 @@ class ConfigParameters(object):
                                 ('save_data_freq', int),
                                 ('params_ranges', dict),
                                 ('patience', int),
+                                ('crossover_frequency', int),
+                                ('pop_crossover_rate', float),
+                                ('pop_crossover_method', str),
                                 ('function_dict', dict)],
                     'train': [('batch_size', int),
                                 ('eval_batch_size', int),
@@ -147,6 +150,7 @@ class ConfigParameters(object):
         ranges = self._get_ranges(config_file)
         self.QNAS_spec['params_ranges'] = OrderedDict(sorted(ranges.items()))
         self.QNAS_spec['early_stopping'] = self.args['early_stopping']
+        self.QNAS_spec['en_pop_crossover'] = self.args['en_pop_crossover']
 
         self._get_fn_spec()
 
