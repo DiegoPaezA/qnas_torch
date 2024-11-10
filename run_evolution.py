@@ -35,7 +35,7 @@ def main(**args):
     # Download dataset
     download_dataset(params=config.train_spec)
     
-    eval_pop = evaluation_ray.EvalPopulation(params=config.train_spec,
+    eval_pop = evaluation.EvalPopulation(params=config.train_spec,
                                                 fn_dict=config.fn_dict,
                                                 log_level=config.train_spec['log_level'])
     
@@ -57,7 +57,7 @@ if __name__ == '__main__':
                         help='Directory where to write logs and model files.')
     parser.add_argument('--data_path', type=str, required=True, help='Path to input data.')
     parser.add_argument('--dataset', type=str, required=True,  help='Dataset name.', 
-                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist','atleta_axial', 'atleta_coronal'])
+                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist', 'organcmnist', 'atleta_axial', 'atleta_coronal'])
     parser.add_argument('--config_file', type=str, required=True,
                         help='Configuration file name.')
     parser.add_argument('--continue_path', type=str, default='',
