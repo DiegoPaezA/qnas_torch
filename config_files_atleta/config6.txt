@@ -11,7 +11,10 @@ QNAS:
     update_quantum_gen: 5
     update_quantum_rate: 0.1
     save_data_freq: 10
-    patience: 80
+    crossover_frequency: 5
+    pop_crossover_rate: 0.25
+    pop_crossover_method: hux # hux, uniform
+    patience: 60
 
     params_ranges:
         decay: 0.9
