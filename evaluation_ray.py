@@ -7,7 +7,6 @@ import time
 import ray
 import torch
 import numpy as np
-import torch.multiprocessing as mp
 from typing import Dict, Any, List
 from cnn import train, input
 from util import init_log, estimate_model_memory
@@ -96,10 +95,11 @@ class EvalPopulation(object):
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")
-
+        temporal_loader = input.GenericDataLoader(params=self.train_params) # Initialize data loader to download dataset
+        del temporal_loader  # Delete the data loader to free up resources
         # Initialize Ray once
         if not ray.is_initialized():
-            ray.init(ignore_reinit_error=True)  # Use ignore_reinit_error to prevent issues in notebooks or during testing
+            ray.init(ignore_reinit_error=True, log_to_driver=True)  # Use ignore_reinit_error to prevent issues in notebooks or during testing
 
 
     def __call__(self, decoded_params: List[Any], decoded_nets: List[Any], generation: int) -> np.ndarray:
@@ -123,7 +123,9 @@ class EvalPopulation(object):
 
         result_refs = []
         gpu_memory_list = [torch.cuda.get_device_properties(i).total_memory for i in range(torch.cuda.device_count())]
-        total_gpu_memory = min(gpu_memory_list)
+        self.total_gpu_memory = min(gpu_memory_list)/ (1024 * 1024)
+        
+        self.logger.info(f"Total GPU memory: {self.total_gpu_memory}")
 
         # Initial evaluation
         for idx in range(pop_size):
@@ -131,9 +133,13 @@ class EvalPopulation(object):
             decoded_net = decoded_nets[idx]
             decoded_param = decoded_params[idx]
 
-            estimated_memory = estimate_model_memory(decoded_net, self.train_params, self.fn_dict)
-            gpu_fraction = estimated_memory / total_gpu_memory if estimated_memory else 1.0
-            gpu_fraction = min(max(gpu_fraction, 0.1), 1.0)
+            estimated_memory = estimate_model_memory(decoded_net, self.train_params, self.fn_dict) / (1024 * 1024)
+            gpu_fraction = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
+            
+            gpu_fraction = min(max(gpu_fraction*1.2, 0.1), 1.0)
+            
+            self.logger.info(f"Estimated memory: {estimated_memory} MB, GPU fraction: {gpu_fraction}")
+
 
             result_ref = run_individual.options(num_gpus=gpu_fraction).remote(
                 model_id,
@@ -192,8 +198,13 @@ class EvalPopulation(object):
             next_retry_queue = []
 
             for idx, decoded_net, decoded_param in retry_queue:
-                model_id = f"{generation}_{idx}_retry_{retries + 1}"
-                result_ref = run_individual.remote(
+                model_id = f"{generation}_{idx}"
+    
+                estimated_memory = estimate_model_memory(decoded_net, self.train_params, self.fn_dict)
+                gpu_fraction = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
+                gpu_fraction = min(max(gpu_fraction*1.2, 0.1), 1.0)
+
+                result_ref = run_individual.options(num_gpus=gpu_fraction).remote(
                     model_id,
                     self.train_params,
                     self.fn_dict,

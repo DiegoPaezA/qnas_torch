@@ -20,7 +20,7 @@ from medmnist import INFO
 import gc
 import torch
 import torch.cuda as cuda
-from cnn import model, input, metrics, fitness_utils
+from cnn import model, input
 
 
 def natural_key(string):
@@ -469,11 +469,13 @@ def build_model(decoded_net, train_params):
     else:
         dataset_info_path = os.path.join(train_params['data_path'], 'data_info.txt')
         dataset_info = load_yaml(dataset_info_path)
+    if dataset_info is None:
+        raise ValueError(f"Failed to load dataset information for {dataset_name}. Check if the dataset is available or if 'data_info.txt' exists and is correctly formatted.")
 
     # Update train_params with dataset info
     train_params['num_classes'] = dataset_info['num_classes']
     train_params['task'] = dataset_info['task']
-    train_params['input_shape'] = [train_params['batch_size']] + dataset_info['shape']
+    train_params['input_shape'] = [train_params['batch_size']* 2] + dataset_info['shape']
 
     # Check if 'cbam' is a key in the fn_dict
     has_cbam_key = any(key.startswith('cbam') for key in train_params['fn_dict'])
@@ -526,7 +528,7 @@ def estimate_model_memory(decoded_net, train_params, fn_dict):
     dummy_input = torch.randn(train_params_copy['input_shape'], device=device)
 
     # Create dummy target tensor
-    batch_size = train_params_copy['batch_size']
+    batch_size = train_params_copy['batch_size'] * 2
     num_classes = train_params_copy['num_classes']
     dummy_target = torch.randint(0, num_classes, (batch_size,), device=device)
 
@@ -544,25 +546,22 @@ def estimate_model_memory(decoded_net, train_params, fn_dict):
     cuda.reset_peak_memory_stats(device=device)
 
     try:
-        optimizer.zero_grad()
+        peak_memory = 0
+        for _ in range(10):  # Run for multiple iterations to simulate actual training
+            optimizer.zero_grad()
+            with torch.cuda.amp.autocast():
+                outputs = model_instance(dummy_input)
+                loss = criterion(outputs, dummy_target)
 
-        with torch.cuda.amp.autocast():
-            # Forward pass
-            outputs = model_instance(dummy_input)
-            loss = criterion(outputs, dummy_target)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            
+            cuda.synchronize()
+            peak_memory = max(peak_memory, cuda.max_memory_allocated(device=device))
 
-        # Backward pass with scaled loss
-        scaler.scale(loss).backward()
-
-        # Optimizer step
-        scaler.step(optimizer)
-
-        # Update the scaler
-        scaler.update()
-
-        # Synchronize and get peak memory usage
-        cuda.synchronize()
-        peak_memory = cuda.max_memory_allocated(device=device)
+        # Apply a buffer (e.g., 20%) and divide by 2 for original batch size
+        buffered_peak_memory = int((peak_memory * 1.2) / 2)
     except Exception as e:
         print(f"Error during memory estimation: {e}")
         peak_memory = None
@@ -573,4 +572,4 @@ def estimate_model_memory(decoded_net, train_params, fn_dict):
         gc.collect()
         cuda.empty_cache()
 
-    return peak_memory
+    return buffered_peak_memory
