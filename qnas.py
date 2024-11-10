@@ -469,6 +469,7 @@ class QNAS(object):
         start_evolution = time.time()
         max_generations = self.generations
         print(f"early stopping enable?: {self.early_stopping}")
+        print(f"population crossover enable?: {self.en_pop_crossover}")
         
         # Update maximum number of generations if continue previous evolution process
         if self.current_gen > 0:
