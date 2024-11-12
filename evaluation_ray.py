@@ -9,7 +9,7 @@ import torch
 import numpy as np
 from typing import Dict, Any, List
 from cnn import train, input
-from util import init_log, estimate_model_memory
+from util import init_log, estimate_total_gpu_memory
 
 
 @ray.remote
@@ -133,12 +133,12 @@ class EvalPopulation(object):
             decoded_net = decoded_nets[idx]
             decoded_param = decoded_params[idx]
 
-            estimated_memory = estimate_model_memory(decoded_net, self.train_params, self.fn_dict) / (1024 * 1024)
-            gpu_fraction = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
+            estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict) # Estimate memory usage in MB
+            gpu_fraction_ = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
             
-            gpu_fraction = min(max(gpu_fraction*1.2, 0.1), 1.0)
+            gpu_fraction = round(min(max(gpu_fraction_*1.25, 0.01), 1.0), 2)
             
-            self.logger.info(f"Estimated memory: {estimated_memory} MB, GPU fraction: {gpu_fraction}")
+            self.logger.info(f"{model_id} Estimated memory: {estimated_memory} MB, GPU fraction: {gpu_fraction}")
 
 
             result_ref = run_individual.options(num_gpus=gpu_fraction).remote(
@@ -200,10 +200,10 @@ class EvalPopulation(object):
             for idx, decoded_net, decoded_param in retry_queue:
                 model_id = f"{generation}_{idx}"
     
-                estimated_memory = estimate_model_memory(decoded_net, self.train_params, self.fn_dict)
-                gpu_fraction = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
-                gpu_fraction = min(max(gpu_fraction*1.2, 0.1), 1.0)
-
+                estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict)
+                gpu_fraction_ = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
+                
+                gpu_fraction = round(min(max(gpu_fraction_*1.25, 0.01), 1.0), 2)
                 result_ref = run_individual.options(num_gpus=gpu_fraction).remote(
                     model_id,
                     self.train_params,

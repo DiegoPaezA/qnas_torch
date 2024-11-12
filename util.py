@@ -21,6 +21,7 @@ import gc
 import torch
 import torch.cuda as cuda
 from cnn import model, input
+import GPUtil
 
 
 def natural_key(string):
@@ -451,6 +452,23 @@ def download_dataset(params: dict):
     else:
         print(f"Dataset {dataset_name} already downloaded.")
 
+
+# Global cache dictionary
+dataset_info_cache = {}
+
+# Function to get dataset info with caching
+def get_dataset_info(dataset_name, data_path):
+    if dataset_name in dataset_info_cache:
+        #print(f"Using cached dataset info for {dataset_name}")
+        return dataset_info_cache[dataset_name]
+
+    dataset_info_path = os.path.join(data_path, 'data_info.txt')
+    dataset_info = load_yaml(dataset_info_path)
+
+    if dataset_info is not None:
+        dataset_info_cache[dataset_name] = dataset_info
+    return dataset_info
+
 def build_model(decoded_net, train_params):
     """
     Build the model based on the decoded network architecture and training parameters.
@@ -464,18 +482,21 @@ def build_model(decoded_net, train_params):
     """
     # Load data info
     dataset_name = train_params['dataset'].lower()
+    
+    print(f"data_path: {train_params['data_path']} - dataset_name: {dataset_name}")
     if dataset_name in input.available_datasets:
         dataset_info = input.available_datasets[dataset_name]
     else:
-        dataset_info_path = os.path.join(train_params['data_path'], 'data_info.txt')
-        dataset_info = load_yaml(dataset_info_path)
+        dataset_info = get_dataset_info(dataset_name, train_params['data_path'])
+        #dataset_info_path = os.path.join(train_params['data_path'], 'data_info.txt')
+        #dataset_info = load_yaml(dataset_info_path)
     if dataset_info is None:
         raise ValueError(f"Failed to load dataset information for {dataset_name}. Check if the dataset is available or if 'data_info.txt' exists and is correctly formatted.")
 
     # Update train_params with dataset info
     train_params['num_classes'] = dataset_info['num_classes']
     train_params['task'] = dataset_info['task']
-    train_params['input_shape'] = [train_params['batch_size']* 2] + dataset_info['shape']
+    train_params['input_shape'] = [train_params['batch_size']] + dataset_info['shape']
 
     # Check if 'cbam' is a key in the fn_dict
     has_cbam_key = any(key.startswith('cbam') for key in train_params['fn_dict'])
@@ -497,79 +518,89 @@ def build_model(decoded_net, train_params):
 
     return model_instance
 
-def estimate_model_memory(decoded_net, train_params, fn_dict):
+def get_gpu_memory():
     """
-    Estimate the GPU memory required to train a model for one iteration.
+    Retrieve GPU memory usage using GPUtil.
+    
+    Returns:
+    - Used memory in MB.
+    """
+    gpus = GPUtil.getGPUs()
+    if gpus:
+        return gpus[0].memoryUsed  # Assuming single-GPU use; modify if using multiple GPUs
+    return None
+
+def estimate_total_gpu_memory(decoded_net, train_params, fn_dict,epochs=5):
+    """
+    Estimate the total GPU memory required, including model, CUDA context, and other factors.
 
     Parameters:
     - decoded_net: The network architecture definition.
     - train_params: Dictionary containing training parameters.
-    - fn_dict: Dictionary containing the function definitions.
+    - fn_dict: Dictionary containing function definitions.
 
     Returns:
-    - peak_memory: Estimated peak GPU memory usage in bytes.
+    - total_peak_memory: Estimated total GPU memory usage in bytes.
     """
+    
+
     train_params_copy = copy.deepcopy(train_params)
     train_params_copy['fn_dict'] = fn_dict
 
-    # Ensure CUDA is available
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is not available. Memory estimation requires a GPU.")
 
     device = train_params_copy.get('device', torch.device('cuda'))
-    train_params_copy['device'] = device  # Ensure the device is updated in train_params_copy
+    train_params_copy['device'] = device
+
+
+    # Clear cache and reset memory stats
+    initial_gpu_memory = get_gpu_memory()
+    #print(f"Initial GPU memory: {initial_gpu_memory}")
 
     # Build the model
     model_instance = build_model(decoded_net, train_params_copy)
     model_instance.to(device)
-    model_instance.train()  # Set model to training mode
+    model_instance.train()
 
-    # Generate dummy input data
+    # Generate dummy input data and target
     dummy_input = torch.randn(train_params_copy['input_shape'], device=device)
-
-    # Create dummy target tensor
-    batch_size = train_params_copy['batch_size'] * 2
+    batch_size = train_params_copy['batch_size']
     num_classes = train_params_copy['num_classes']
     dummy_target = torch.randint(0, num_classes, (batch_size,), device=device)
 
-    # Define loss function
+    # Loss function and optimizer
     criterion = torch.nn.CrossEntropyLoss().to(device)
-
-    # Define optimizer (use the same optimizer as in your training)
     optimizer = torch.optim.SGD(model_instance.parameters(), lr=0.01)
 
-    # Instantiate the GradScaler
-    scaler = torch.cuda.amp.GradScaler()
-
-    # Clear cache and reset memory stats
-    cuda.empty_cache()
-    cuda.reset_peak_memory_stats(device=device)
-
+    gpu_memory_after = []
     try:
-        peak_memory = 0
-        for _ in range(10):  # Run for multiple iterations to simulate actual training
+        for epoch in range(epochs):
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
-                outputs = model_instance(dummy_input)
-                loss = criterion(outputs, dummy_target)
+            outputs = model_instance(dummy_input)
+            loss = criterion(outputs, dummy_target)
+            loss.backward()
+            optimizer.step()
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
+            # Track memory usage after each epoch
             cuda.synchronize()
-            peak_memory = max(peak_memory, cuda.max_memory_allocated(device=device))
+            memory_after = get_gpu_memory()
+            gpu_memory_after.append(memory_after)
 
-        # Apply a buffer (e.g., 20%) and divide by 2 for original batch size
-        buffered_peak_memory = int((peak_memory * 1.2) / 2)
+        total_peak_memory = max(gpu_memory_after) - initial_gpu_memory
+        #print(f"GPU memory after each epoch: {gpu_memory_after}")
+        #print(f"Total peak memory increase: {total_peak_memory} MB")
+
     except Exception as e:
         print(f"Error during memory estimation: {e}")
-        peak_memory = None
+        total_peak_memory = 0.0
+
     finally:
-        # Clean up to free memory
+        # Cleanup
         torch.cuda.synchronize()
-        del model_instance, dummy_input, dummy_target, outputs, loss, optimizer, scaler, criterion, train_params_copy
+        del model_instance, dummy_input, dummy_target, outputs, loss, optimizer, criterion, train_params_copy
         gc.collect()
         cuda.empty_cache()
+        
+    return total_peak_memory
 
-    return buffered_peak_memory
