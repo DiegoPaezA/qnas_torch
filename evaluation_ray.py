@@ -123,15 +123,13 @@ class EvalPopulation(object):
         self.logger.info(f"Starting Generation {generation} with {pop_size} individuals")
         evol_time_start = time.perf_counter()
 
-        gpu_memory_list = [torch.cuda.get_device_properties(i).total_memory for i in range(torch.cuda.device_count())]
-        # Get the used GPU memory for each GPU
-        used_gpu_memory = [self.gputil[i].memoryUsed for i in range(len(self.gputil))] 
+        # Get the available GPU memory for each GPU
+        available_gpu_memory = [self.gputil[i].memoryFree for i in range(len(self.gputil))] 
 
         # Calculate the total GPU memory available
-        self.total_gpu_memory = min(gpu_memory_list)/ (1024 * 1024) - min(used_gpu_memory)
+        self.total_gpu_memory = min(available_gpu_memory)
         
-        self.logger.info(f"Used GPU memory: {used_gpu_memory}")
-        self.logger.info(f"Available GPU memory: {self.total_gpu_memory}")
+        #self.logger.info(f"Available GPU memory: {self.total_gpu_memory}")
         
         # Step 1: Calculate GPU fractions for each model
         self.gpu_fractions = self.calculate_gpu_fractions(decoded_nets, generation)
@@ -158,20 +156,26 @@ class EvalPopulation(object):
 
         # Process results and queue errors
         for idx, result in enumerate(results):
-            if result['status'] == 'success':
-                evaluations[idx] = result['fitness']
-                self.logger.info(
-                    f"Calculated fitness of individual {idx} with "
-                    f"Fitness: {round(result['fitness'], 3)}, Params: {round(result['params'], 2)}M, "
-                    f"Inference Time: {round(result['inference_time'], 3)} μs"
-                )
-            else:
+            try:
+                if result is not None and result['status'] == 'success':
+                    evaluations[idx] = result['fitness']
+                    self.logger.info(
+                        f"Calculated fitness of individual {idx} with "
+                        f"Fitness: {round(result['fitness'], 3)}, Params: {round(result['params'], 2)}M, "
+                        f"Inference Time: {round(result['inference_time'], 3)} μs"
+                    )
+                else:
+                    evaluations[idx] = 0.0
+                    retry_queue.append((idx, decoded_nets[idx], decoded_params[idx]))  # Add to retry queue
+                    error_message = result.get('error_msg', 'Unknown error') if result else 'Result is None'
+                    self.logger.error(
+                        f"Failed to evaluate individual {idx}: {error_message}"
+                    )
+            except Exception as e:
+                # Handle any other unforeseen errors
                 evaluations[idx] = 0.0
                 retry_queue.append((idx, decoded_nets[idx], decoded_params[idx]))  # Add to retry queue
-                self.logger.error(
-                    f"Failed to evaluate individual {idx}: {result.get('error_msg', 'Unknown error')}"
-                )
-                self.logger.error(f"decoded_net: {decoded_nets[idx]}")
+                self.logger.error(f"Unexpected error for individual {idx}: {str(e)}")
 
         # Retry failed models with a maximum retry limit
         max_retries = 3  # Define the maximum number of retries
@@ -246,7 +250,7 @@ class EvalPopulation(object):
             retry_results_fetched = ray.get([ref[1] for ref in retry_results])
 
             for (idx, result) in zip([ref[0] for ref in retry_results], retry_results_fetched):
-                if result['status'] == 'success':
+                if result is not None and result['status'] == 'success':
                     evaluations[idx] = result['fitness']
                     self.logger.info(
                         f"Retry successful for individual {idx} with "

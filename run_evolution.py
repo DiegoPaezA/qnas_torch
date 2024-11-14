@@ -33,9 +33,11 @@ def main(**args):
         logger.info(f"Using mixed precision training ...")
         
     # Download dataset
-    download_dataset(params=config.train_spec)
+    dataset_status = download_dataset(params=config.train_spec)
+    status_message = "Dataset is already downloaded." if dataset_status else "Dataset downloaded successfully."
+    logger.info(status_message)
     
-    eval_pop = evaluation.EvalPopulation(params=config.train_spec,
+    eval_pop = evaluation_ray.EvalPopulation(params=config.train_spec,
                                                 fn_dict=config.fn_dict,
                                                 log_level=config.train_spec['log_level'])
     
