@@ -6,6 +6,7 @@
 import time
 import ray
 import torch
+import GPUtil
 import numpy as np
 from typing import Dict, Any, List
 from cnn import train, input
@@ -97,6 +98,7 @@ class EvalPopulation(object):
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")
         temporal_loader = input.GenericDataLoader(params=self.train_params) # Initialize data loader to download dataset
         del temporal_loader  # Delete the data loader to free up resources
+        self.gputil = GPUtil.getGPUs()
         # Initialize Ray once
         if not ray.is_initialized():
             ray.init(ignore_reinit_error=True, log_to_driver=True)  # Use ignore_reinit_error to prevent issues in notebooks or during testing
@@ -121,27 +123,28 @@ class EvalPopulation(object):
         self.logger.info(f"Starting Generation {generation} with {pop_size} individuals")
         evol_time_start = time.perf_counter()
 
-        result_refs = []
         gpu_memory_list = [torch.cuda.get_device_properties(i).total_memory for i in range(torch.cuda.device_count())]
-        self.total_gpu_memory = min(gpu_memory_list)/ (1024 * 1024)
-        
-        self.logger.info(f"Total GPU memory: {self.total_gpu_memory}")
+        # Get the used GPU memory for each GPU
+        used_gpu_memory = [self.gputil[i].memoryUsed for i in range(len(self.gputil))] 
 
-        # Initial evaluation
+        # Calculate the total GPU memory available
+        self.total_gpu_memory = min(gpu_memory_list)/ (1024 * 1024) - min(used_gpu_memory)
+        
+        self.logger.info(f"Used GPU memory: {used_gpu_memory}")
+        self.logger.info(f"Available GPU memory: {self.total_gpu_memory}")
+        
+        # Step 1: Calculate GPU fractions for each model
+        self.gpu_fractions = self.calculate_gpu_fractions(decoded_nets, generation)
+        
+        # Step 2: Run models with precomputed GPU fractions
+        result_refs = []
         for idx in range(pop_size):
             model_id = f"{generation}_{idx}"
             decoded_net = decoded_nets[idx]
             decoded_param = decoded_params[idx]
+            gpu_fraction = self.gpu_fractions[idx]
 
-            estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict) # Estimate memory usage in MB
-            gpu_fraction_ = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
-            
-            gpu_fraction = round(min(max(gpu_fraction_*1.25, 0.01), 1.0), 2)
-            
-            self.logger.info(f"{model_id} Estimated memory: {estimated_memory} MB, GPU fraction: {gpu_fraction}")
-
-
-            result_ref = run_individual.options(num_gpus=gpu_fraction).remote(
+            result_ref = run_individual.options(num_gpus=gpu_fraction,max_retries = 3).remote(
                 model_id,
                 self.train_params,
                 self.fn_dict,
@@ -168,6 +171,7 @@ class EvalPopulation(object):
                 self.logger.error(
                     f"Failed to evaluate individual {idx}: {result.get('error_msg', 'Unknown error')}"
                 )
+                self.logger.error(f"decoded_net: {decoded_nets[idx]}")
 
         # Retry failed models with a maximum retry limit
         max_retries = 3  # Define the maximum number of retries
@@ -181,6 +185,35 @@ class EvalPopulation(object):
 
         return evaluations
 
+    def calculate_gpu_fractions(self, decoded_nets: List[Any], generation: int) -> List[float]:
+        """
+        Estimate memory usage and calculate GPU fractions for each model in the population.
+
+        Parameters:
+        - decoded_nets (list): List of network architectures for each individual in the population.
+        - generation (int): Identifier for the current generation of models, used for logging.
+
+        Returns:
+        - gpu_fractions (list of floats): A list of GPU fractions required for each model.
+        """
+        gpu_fractions = []
+        
+        for idx, decoded_net in enumerate(decoded_nets):
+            model_id = f"{generation}_{idx}"
+
+            # Estimate memory usage in MB
+            estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict)
+            gpu_fraction_ = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
+            gpu_fraction = round(min(max(gpu_fraction_ * 1.20, 0.01), 1.0), 2)
+
+            # Log the memory estimation and GPU fraction
+            self.logger.info(f"{model_id} Estimated memory: {estimated_memory} MB, GPU fraction: {gpu_fraction}")
+
+            # Store the GPU fraction for use in evaluations
+            gpu_fractions.append(gpu_fraction)
+
+        return gpu_fractions
+    
     def retry_failed_models(self, retry_queue: List[tuple], generation: int, evaluations: np.ndarray, max_retries: int) -> None:
         """
         Re-evaluate models that failed in the initial evaluation up to a maximum retry limit.
@@ -198,12 +231,8 @@ class EvalPopulation(object):
             next_retry_queue = []
 
             for idx, decoded_net, decoded_param in retry_queue:
-                model_id = f"{generation}_{idx}"
-    
-                estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict)
-                gpu_fraction_ = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
-                
-                gpu_fraction = round(min(max(gpu_fraction_*1.25, 0.01), 1.0), 2)
+                model_id = f"{generation}_{idx}"                
+                gpu_fraction = self.gpu_fractions[idx]
                 result_ref = run_individual.options(num_gpus=gpu_fraction).remote(
                     model_id,
                     self.train_params,

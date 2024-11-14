@@ -483,13 +483,10 @@ def build_model(decoded_net, train_params):
     # Load data info
     dataset_name = train_params['dataset'].lower()
     
-    print(f"data_path: {train_params['data_path']} - dataset_name: {dataset_name}")
     if dataset_name in input.available_datasets:
         dataset_info = input.available_datasets[dataset_name]
     else:
         dataset_info = get_dataset_info(dataset_name, train_params['data_path'])
-        #dataset_info_path = os.path.join(train_params['data_path'], 'data_info.txt')
-        #dataset_info = load_yaml(dataset_info_path)
     if dataset_info is None:
         raise ValueError(f"Failed to load dataset information for {dataset_name}. Check if the dataset is available or if 'data_info.txt' exists and is correctly formatted.")
 
@@ -530,7 +527,7 @@ def get_gpu_memory():
         return gpus[0].memoryUsed  # Assuming single-GPU use; modify if using multiple GPUs
     return None
 
-def estimate_total_gpu_memory(decoded_net, train_params, fn_dict,epochs=5):
+def estimate_total_gpu_memory(decoded_net, train_params, fn_dict, epochs=3):
     """
     Estimate the total GPU memory required, including model, CUDA context, and other factors.
 
@@ -540,7 +537,7 @@ def estimate_total_gpu_memory(decoded_net, train_params, fn_dict,epochs=5):
     - fn_dict: Dictionary containing function definitions.
 
     Returns:
-    - total_peak_memory: Estimated total GPU memory usage in bytes.
+    - total_peak_memory: Estimated total GPU memory usage in MB.
     """
     
 
