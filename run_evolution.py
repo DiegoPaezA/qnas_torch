@@ -4,7 +4,6 @@ import os
 import qnas
 import qnas_config as cfg
 import evaluation
-import evaluation_ray
 from util import check_files, init_log, download_dataset
 
 def main(**args):
@@ -37,7 +36,7 @@ def main(**args):
     status_message = "Dataset is already downloaded." if dataset_status else "Dataset downloaded successfully."
     logger.info(status_message)
     
-    eval_pop = evaluation_ray.EvalPopulation(params=config.train_spec,
+    eval_pop = evaluation.EvalPopulation(params=config.train_spec,
                                                 fn_dict=config.fn_dict,
                                                 log_level=config.train_spec['log_level'])
     
