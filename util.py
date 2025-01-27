@@ -383,6 +383,98 @@ def load_evolved_data(experiment_path: str):
 
         return {'net': net_list, 'generation': generation, 'individual': individual, 'best_accuracy': best_acc}
     
+def load_retrain_results(experiment_path, retrain_file_name='retrain_results_F13_multistep.txt'):
+    """
+    Load and identify the best retrained model from a JSON results file, then
+    return the directory path, best model path, and its network definition.
+
+    Args:
+        experiment_path (str):
+            The path to the experiment folder containing retraining results.
+        retrain_file_name (str, optional):
+            The name of the JSON file that stores retrain results 
+            (keys map to experiment runs, values include test metrics).
+            Defaults to 'retrain_results_F13_multistep.txt'.
+
+    Returns:
+        dict:
+            A dictionary with:
+                - 'net': (list) the network layer definitions from the best run.
+                - 'retrain_path': (str) the folder where the best retraining logs 
+                and files are stored.
+                - 'best_model_path': (str) the file path to the best model checkpoint 
+                (`best_model.pth`) in the best retraining folder.
+
+    Raises:
+        FileNotFoundError:
+            If the determined best retrain folder does not exist, or if the JSON results file 
+            or `retraining_params.txt` file are missing or unreadable.
+    """
+    file_path = os.path.join(experiment_path, retrain_file_name)
+    with open(file_path, 'r') as f:
+        retrain_data = json.load(f)
+        
+    # Determine the key with the highest test accuracy
+    best_key = max(retrain_data, key=lambda x: retrain_data[x]['test_accuracy'])
+    
+    # Convert key naming (e.g., "multistep_F13_retrain_1" -> "retrain_F13_1")
+    parts = best_key.split("_")
+    best_key = f"{parts[2]}_{parts[1]}_{parts[3]}"
+    
+    # Construct path to the folder for the best retraining run
+    retrain_path = os.path.join(experiment_path, best_key)
+    if not os.path.exists(retrain_path):
+        raise FileNotFoundError(f"Could not find the retrain folder at {retrain_path}")
+    
+    # Load retraining params (YAML) within the best retraining folder
+    with open(os.path.join(retrain_path, 'retraining_params.txt'), 'r') as file:
+        best_retrain_info = yaml.safe_load(file)
+    
+    net_list = best_retrain_info.get('net_list', [])
+    
+    # Build the path to the best model file
+    best_model_path = os.path.join(retrain_path, 'best_model.pth')
+        
+    return {'net': net_list, 'retrain_path': retrain_path, 'best_model_path': best_model_path}
+
+    
+def load_log_params_evolution(experiment_path: str):
+    """
+    Loads the log parameters for the evolution process from the specified experiment path.
+
+    Parameters:
+    - experiment_path (str): The path to the experiment folder containing evolved data.
+
+    Returns:
+    dict: A dictionary containing the log parameters for the evolution process.
+
+    This method reads the log parameters for the evolution process from the
+    'log_params_evolution.txt' file. These typically include:
+        - train_spec  (dict)
+        - QNAS_spec   (dict)
+        - fn_dict     (dict)
+    among other possible keys like population size, generations, mutation rate, etc.
+    """
+
+    log_file = os.path.join(experiment_path, 'log_params_evolution.txt')
+    if not os.path.isfile(log_file):
+        raise FileNotFoundError(f"Could not find log_params_evolution.txt at {log_file}")
+
+    with open(log_file, 'r') as file:
+        log_params = yaml.safe_load(file)
+    
+    # Extract the subsets you need: train, QNAS, fn_dict
+    train_spec = dict(log_params['train'])
+    QNAS_spec = dict(log_params['QNAS'])    
+    fn_dict = log_params['fn_dict']
+
+    # Return them together in a dictionary (you can rename or restructure as you prefer):
+    return {
+        'train_spec': train_spec,
+        'QNAS_spec': QNAS_spec,
+        'fn_dict': fn_dict
+    }
+    
 def calculate_time(start_time, elapse_time,current_gen:int=0, max_generations:int=300, end_evol = True):
     """
     Calculate the elapsed time and the estimated remaining time in the evolution process.
@@ -527,77 +619,98 @@ def get_gpu_memory():
         return gpus[0].memoryUsed  # Assuming single-GPU use; modify if using multiple GPUs
     return None
 
-def estimate_total_gpu_memory(decoded_net, train_params, fn_dict, epochs=3):
+import pynvml
+import os
+
+pynvml.nvmlInit()
+def get_process_gpu_memory_usage(gpu_id=0):
+    handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
+    procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
+    current_pid = os.getpid()
+    for p in procs:
+        if p.pid == current_pid:
+            return p.usedGpuMemory / (1024**2)  # Convert bytes to MB
+    return 0.0
+
+def estimate_total_gpu_memory(decoded_net, train_params, fn_dict, dataloader, epochs=3, gpu_id=0):
     """
-    Estimate the total GPU memory required, including model, CUDA context, and other factors.
-
-    Parameters:
-    - decoded_net: The network architecture definition.
-    - train_params: Dictionary containing training parameters.
-    - fn_dict: Dictionary containing function definitions.
-
-    Returns:
-    - total_peak_memory: Estimated total GPU memory usage in MB.
+    Estimate the total GPU memory required for the model from the perspective of NVML/nvidia-smi.
     """
-    
-
     train_params_copy = copy.deepcopy(train_params)
     train_params_copy['fn_dict'] = fn_dict
-
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is not available. Memory estimation requires a GPU.")
-
-    device = train_params_copy.get('device', torch.device('cuda'))
+    
+    device = train_params_copy.get('device', torch.device('cuda', gpu_id))
     train_params_copy['device'] = device
 
+    # Clear cache before starting
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
 
-    # Clear cache and reset memory stats
-    initial_gpu_memory = get_gpu_memory()
-    #print(f"Initial GPU memory: {initial_gpu_memory}")
-
-    # Build the model
+    # Record initial memory usage
+    initial_memory = get_process_gpu_memory_usage(gpu_id)
+    peak_memory = initial_memory
+    
+    # Build and load model
     model_instance = build_model(decoded_net, train_params_copy)
     model_instance.to(device)
     model_instance.train()
 
-    # Generate dummy input data and target
-    dummy_input = torch.randn(train_params_copy['input_shape'], device=device)
-    batch_size = train_params_copy['batch_size']
-    num_classes = train_params_copy['num_classes']
-    dummy_target = torch.randint(0, num_classes, (batch_size,), device=device)
-
-    # Loss function and optimizer
     criterion = torch.nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.SGD(model_instance.parameters(), lr=0.01)
 
-    gpu_memory_after = []
+    warmup_batches = 10
+    measure_batches = 5  # Batches after warm-up that we measure
+
     try:
-        for epoch in range(epochs):
+        # Phase 1: Warm-up
+        warmup_count = 0
+        for batch_idx, (inputs, targets) in enumerate(dataloader):
+            inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
-            outputs = model_instance(dummy_input)
-            loss = criterion(outputs, dummy_target)
+            outputs = model_instance(inputs)
+            loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
+            torch.cuda.synchronize()
 
-            # Track memory usage after each epoch
-            cuda.synchronize()
-            memory_after = get_gpu_memory()
-            gpu_memory_after.append(memory_after)
+            warmup_count += 1
+            if warmup_count >= warmup_batches:
+                break
 
-        total_peak_memory = max(gpu_memory_after) - initial_gpu_memory
-        #print(f"GPU memory after each epoch: {gpu_memory_after}")
-        #print(f"Total peak memory increase: {total_peak_memory} MB")
+        # Phase 2: Measurement after warm-up
+        measure_count = 0
+        for batch_idx, (inputs, targets) in enumerate(dataloader):
+            if measure_count >= measure_batches:
+                break
+            inputs, targets = inputs.to(device), targets.to(device)
+            optimizer.zero_grad()
+            outputs = model_instance(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            torch.cuda.synchronize()
+            
+            # Optional small delay
+            import time
+            time.sleep(0.1)
+            
+            current_usage = get_process_gpu_memory_usage(gpu_id)
+            if current_usage > peak_memory:
+                peak_memory = current_usage
+
+            measure_count += 1
+
+        estimated_memory = peak_memory - initial_memory
+        if estimated_memory < 0:
+            estimated_memory = peak_memory
 
     except Exception as e:
         print(f"Error during memory estimation: {e}")
-        total_peak_memory = 0.0
-
+        estimated_memory = peak_memory - initial_memory if (peak_memory > initial_memory) else peak_memory
     finally:
-        # Cleanup
         torch.cuda.synchronize()
-        del model_instance, dummy_input, dummy_target, outputs, loss, optimizer, criterion, train_params_copy
+        del model_instance, inputs, targets, outputs, loss, optimizer, criterion
         gc.collect()
-        cuda.empty_cache()
-        
-    return total_peak_memory
+        torch.cuda.empty_cache()
 
+    return estimated_memory
