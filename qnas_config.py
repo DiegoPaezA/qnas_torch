@@ -145,6 +145,7 @@ class ConfigParameters(object):
 
         self.train_spec = dict(config_file['train'])
         self.QNAS_spec = dict(config_file['QNAS'])
+        self.files_spec['config_file'] = self.args['config_file']
 
         # Get the parameters lower and upper limits
         ranges = self._get_ranges(config_file)
@@ -207,10 +208,10 @@ class ConfigParameters(object):
 
         if self.train_spec['optimizer'] == 'Momentum':
             ranges = {key: val for key, val in config_file['QNAS']['params_ranges'].items()
-                      if key != 'decay' and type(val) == list}
+                    if key != 'decay' and type(val) == list}
         else:
             ranges = {key: val for key, val in config_file['QNAS']['params_ranges'].items()
-                      if type(val) == list}
+                    if type(val) == list}
 
         # If user provided a value instead of a range, parameter will not be evolved.
         for key, value in config_file['QNAS']['params_ranges'].items():
@@ -230,7 +231,7 @@ class ConfigParameters(object):
             self.files_spec['continue_path'], 'log_params_evolution.txt')
 
         self.files_spec['previous_data_file'] = os.path.join(self.args['continue_path'],
-                                                             'data_QNAS.pkl')
+                                                            'data_QNAS.pkl')
         self.load_old_params()
         self.QNAS_spec['max_generations'] = load_yaml(
                 self.args['config_file'])['QNAS']['max_generations']
@@ -243,14 +244,14 @@ class ConfigParameters(object):
         """
 
         self.files_spec['previous_QNAS_params'] = os.path.join(self.args['experiment_path'],
-                                                               'log_params_evolution.txt')
+                                                            'log_params_evolution.txt')
         self.load_old_params()
 
         for key in self.args.keys():
             self.train_spec[key] = self.args[key]
 
         self.train_spec['experiment_path'] = os.path.join(self.train_spec['experiment_path'],
-                                                          self.args['retrain_folder'])
+                                                        self.args['retrain_folder'])
         del self.args['retrain_folder']
 
     def _get_common_params(self):
@@ -417,16 +418,16 @@ class ConfigParameters(object):
         if self.train_spec['phase'] == 'retrain':
             phase = 'retrain'
             params_dict = {'evolved_params': self.evolved_params,
-                           'train': self.train_spec,
-                           'files': self.files_spec}
-                           #'train_data_info': data_dict}
+                            'train': self.train_spec,
+                            'files': self.files_spec}
+                            #'train_data_info': data_dict}
         else:
             phase = 'evolution'
             params_dict = {'QNAS': self.QNAS_spec,
-                           'train': self.train_spec,
-                           'files': self.files_spec,
-                           'fn_dict': self.fn_dict}
-                           #'train_data_info': data_dict}
+                            'train': self.train_spec,
+                            'files': self.files_spec,
+                            'fn_dict': self.fn_dict}
+                            #'train_data_info': data_dict}
 
         params_file_path = os.path.join(self.train_spec['experiment_path'],
                                         f'log_params_{phase}.txt')
