@@ -770,9 +770,7 @@ class ResidualV1Pr(nn.Module):
             
         tensor = self.conv2(tensor)
         tensor = self.bn2(tensor)
-              
         #print(f'tensor.shape Layer 2: {tensor.shape}')
-              
         tensor = tensor + self.shortcut(inputs)
         tensor = F.relu(tensor)
         #print(f'output.shape: {tensor.shape}')
@@ -874,7 +872,177 @@ class AvgPooling(nn.Module):
             tensor = tensor.permute(0, 2, 3, 1) # Convert NCHW to NHWC format
 
         return tensor
-    
+
+class StochasticPooling(nn.Module):
+    """ Stochastic Pooling layer """
+
+    def __init__(self, kernel=2, strides=2, channels_last=False):
+        """
+        Args:
+            kernel : int
+                Tamaño de la ventana de pooling (p.ej., 2 implica [2,2])
+            strides : int
+                Stride de la ventana de pooling
+            channels_last : bool
+                Indica si el tensor de entrada está en formato NHWC
+        """
+        super().__init__()
+        self.kernel = kernel
+        self.strides = strides
+        self.channels_last = channels_last
+        self.padding = 0  # 'valid' sin padding
+
+    def forward(self, inputs):
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2)  # Convertir de NHWC a NCHW
+
+        # Verificar tamaño de la imagen
+        if inputs.shape[2] < self.kernel or inputs.shape[3] < self.kernel:
+            return inputs
+
+        # Extraer ventanas con unfold
+        patches = F.unfold(inputs, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
+        batch, flat_size, L = patches.shape
+        channels = inputs.shape[1]
+        patches = patches.view(batch, channels, self.kernel * self.kernel, L)
+
+        # Calcular probabilidades normalizadas para cada parche
+        probs = F.softmax(patches, dim=2)  # [B, C, K*K, L]
+
+        # Reorganizar para muestreo: colapsar dimensiones batch, canal y patch
+        probs_reshaped = probs.permute(0, 1, 3, 2).reshape(-1, self.kernel * self.kernel)
+        patches_reshaped = patches.permute(0, 1, 3, 2).reshape(-1, self.kernel * self.kernel)
+
+        # Muestrear índices según las probabilidades
+        indices = torch.multinomial(probs_reshaped, num_samples=1).squeeze(-1)
+        pooled = patches_reshaped.gather(1, indices.unsqueeze(1)).view(batch, channels, L)
+
+        # Reconstruir forma espacial
+        out_H = (inputs.shape[2] - self.kernel) // self.strides + 1
+        out_W = (inputs.shape[3] - self.kernel) // self.strides + 1
+        tensor = pooled.view(batch, channels, out_H, out_W)
+
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1)  # Convertir de NCHW a NHWC
+
+        return tensor
+
+# Definición de la capa AttentionPooling
+class AttentionPooling(nn.Module):
+    """ Attention Pooling layer """
+
+    def __init__(self, in_channels=3, kernel=2, strides=2, channels_last=False):
+        """
+        Args:
+            in_channels : int
+                Número de canales de entrada.
+            kernel : int
+                Tamaño de la ventana de pooling
+            strides : int
+                Stride de la ventana de pooling
+            channels_last : bool
+                Indica si el tensor de entrada está en formato NHWC
+        """
+        super().__init__()
+        self.kernel = kernel
+        self.strides = strides
+        self.channels_last = channels_last
+        self.padding = 0
+        
+        # Capa para generar el mapa de atención (un solo canal)
+        self.attn_conv = nn.Conv2d(in_channels, 1, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
+
+    def forward(self, inputs):
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2)
+            
+        # Verificar tamaño de la imagen
+        if inputs.shape[2] < self.kernel or inputs.shape[3] < self.kernel:
+            return inputs
+        
+        # Generar y normalizar el mapa de atención
+        attn_scores = self.attn_conv(inputs)  # [B, 1, H', W']
+        attn_weights = torch.sigmoid(attn_scores)
+        
+        # Aplicar pooling a la entrada: se obtiene una salida de tamaño [B, C, H', W']
+        pooled = F.avg_pool2d(inputs, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
+        
+        # Multiplicar la salida del pooling por los pesos de atención (broadcastable: [B, C, H', W'] * [B, 1, H', W'])
+        tensor = pooled * attn_weights
+        
+        if self.channels_last:
+            tensor = tensor.permute(0, 2, 3, 1)
+        
+        return tensor
+
+class AttentionPooling2(nn.Module):
+    """ Attention-Based Pooling layer """
+
+    def __init__(self, kernel=1, strides=1, channels_last=False):
+        """ Initialize AttentionPooling.
+
+        Args:
+            kernel : int
+                Represents the size of the pooling window (3 means [3,3])
+            strides : int
+                Represents the stride of the pooling window (3 means [3,3])
+            channels_last : bool
+                Whether the input tensor is in channels-last format (NHWC)
+        """
+        super().__init__()
+        self.kernel = kernel
+        self.strides = strides
+        self.padding = 0  # 'valid' no padding
+        self.channels_last = channels_last
+
+        # Learnable attention weights
+        self.attention_conv = nn.Conv2d(
+            in_channels=1,  # Treat each spatial location as a single channel
+            out_channels=1,
+            kernel_size=self.kernel,
+            stride=self.strides,
+            padding=self.padding,
+            bias=False
+        )
+
+    def forward(self, inputs):
+        """ Attention-Based Pooling layer.
+
+        Args:
+            inputs: input tensor to the block.
+
+        Returns:
+            output tensor.
+        """
+        if self.channels_last:
+            inputs = inputs.permute(0, 3, 1, 2)  # Convert NHWC to NCHW format
+
+        # Check if the image size is valid
+        if inputs.shape[2] < self.kernel or inputs.shape[3] < self.kernel:
+            return inputs  # Skip pooling if the image is too small
+
+        batch_size, channels, height, width = inputs.shape
+
+        # Compute attention weights
+        attention_input = inputs.mean(dim=1, keepdim=True)  # Average across channels
+        attention_weights = self.attention_conv(attention_input)  # Compute attention weights
+
+        # Reshape attention_weights to match the pooling output size
+        output_height = (height - self.kernel) // self.strides + 1
+        output_width = (width - self.kernel) // self.strides + 1
+        attention_weights = attention_weights.view(batch_size, -1)  # Flatten spatial dimensions
+        attention_weights = F.softmax(attention_weights, dim=-1)  # Softmax over spatial dimensions
+        attention_weights = attention_weights.view(batch_size, 1, output_height, output_width)  # Reshape to output size
+
+        # Apply pooling with attention weights
+        pooled = F.avg_pool2d(inputs, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
+        output = pooled * attention_weights  # Weighted pooling
+
+        if self.channels_last:
+            output = output.permute(0, 2, 3, 1)  # Convert NCHW to NHWC format
+
+        return output
+
 class FullyConnected(nn.Module):
     def __init__(self,input_features=1, units=1):
         """ Initialize FullyConnected.
