@@ -1,4 +1,4 @@
-""" Copyright (c) 2023, Diego Páez
+""" Copyright (c) 2024, Diego Páez
     * Licensed under The MIT License [see LICENSE for details]
 
     - Distribute and Evaluate the population using Ray.
@@ -96,8 +96,8 @@ class EvalPopulation(object):
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")
-        temporal_loader = input.GenericDataLoader(params=self.train_params) # Initialize data loader to download dataset
-        del temporal_loader  # Delete the data loader to free up resources
+        self.temporal_loader = input.GenericDataLoader(params=self.train_params) # Initialize data loader to download dataset
+        #del temporal_loader  # Delete the data loader to free up resources
         self.gputil = GPUtil.getGPUs()
         # Initialize Ray once
         if not ray.is_initialized():
@@ -190,30 +190,23 @@ class EvalPopulation(object):
         return evaluations
 
     def calculate_gpu_fractions(self, decoded_nets: List[Any], generation: int) -> List[float]:
-        """
-        Estimate memory usage and calculate GPU fractions for each model in the population.
-
-        Parameters:
-        - decoded_nets (list): List of network architectures for each individual in the population.
-        - generation (int): Identifier for the current generation of models, used for logging.
-
-        Returns:
-        - gpu_fractions (list of floats): A list of GPU fractions required for each model.
-        """
         gpu_fractions = []
-        
+        # Get a temporary dataloader to feed into estimation
+        train_loader, _ = self.temporal_loader.get_loader(pin_memory_device=self.gpus[0]) 
         for idx, decoded_net in enumerate(decoded_nets):
             model_id = f"{generation}_{idx}"
+            
+            # Estimate memory using the revised function
+            estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict, train_loader)
 
-            # Estimate memory usage in MB
-            estimated_memory = estimate_total_gpu_memory(decoded_net, self.train_params, self.fn_dict)
-            gpu_fraction_ = estimated_memory / self.total_gpu_memory if estimated_memory else 1.0
-            gpu_fraction = round(min(max(gpu_fraction_ * 1.20, 0.01), 1.0), 2)
+            if estimated_memory == 0.0:
+                gpu_fraction = 1.0
+            else:
+                gpu_fraction_ = estimated_memory / self.total_gpu_memory
+                # Add safety margin
+                gpu_fraction = round(min(max(gpu_fraction_ * 1, 0.01), 1.0), 2)
 
-            # Log the memory estimation and GPU fraction
             self.logger.info(f"{model_id} Estimated memory: {estimated_memory} MB, GPU fraction: {gpu_fraction}")
-
-            # Store the GPU fraction for use in evaluations
             gpu_fractions.append(gpu_fraction)
 
         return gpu_fractions
