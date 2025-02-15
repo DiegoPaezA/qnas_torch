@@ -60,3 +60,7 @@ train:
     # penalization parameters - scalarized fitness
     max_params: 2700000 # 2.7M
     max_inference_time: 3600 # us
+
+    # Network structure Configuration
+    network_config: default
+    network_gap = False

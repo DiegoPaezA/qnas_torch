@@ -11,7 +11,10 @@ QNAS:
     update_quantum_gen: 5
     update_quantum_rate: 0.1
     save_data_freq: 10
-    patience: 80
+    crossover_frequency: 5
+    pop_crossover_rate: 0.4 # offspring replacement proportion in the population
+    pop_crossover_method: hux # hux, uniform
+    patience: 60
 
 
     params_ranges:
@@ -33,8 +36,8 @@ QNAS:
                      'no_op':        {'function': 'NoOp', 'params': {}, 'prob': 1.0/2.0}}
 
 train:
-    batch_size: 64
-    eval_batch_size: 64
+    batch_size: 128
+    eval_batch_size: 128
     max_epochs: 50
     epochs_to_eval: 5 
     optimizer: AdamW
