@@ -927,122 +927,6 @@ class StochasticPooling(nn.Module):
 
         return tensor
 
-# Definición de la capa AttentionPooling
-class AttentionPooling(nn.Module):
-    """ Attention Pooling layer """
-
-    def __init__(self, in_channels=3, kernel=2, strides=2, channels_last=False):
-        """
-        Args:
-            in_channels : int
-                Número de canales de entrada.
-            kernel : int
-                Tamaño de la ventana de pooling
-            strides : int
-                Stride de la ventana de pooling
-            channels_last : bool
-                Indica si el tensor de entrada está en formato NHWC
-        """
-        super().__init__()
-        self.kernel = kernel
-        self.strides = strides
-        self.channels_last = channels_last
-        self.padding = 0
-        
-        # Capa para generar el mapa de atención (un solo canal)
-        self.attn_conv = nn.Conv2d(in_channels, 1, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
-
-    def forward(self, inputs):
-        if self.channels_last:
-            inputs = inputs.permute(0, 3, 1, 2)
-            
-        # Verificar tamaño de la imagen
-        if inputs.shape[2] < self.kernel or inputs.shape[3] < self.kernel:
-            return inputs
-        
-        # Generar y normalizar el mapa de atención
-        attn_scores = self.attn_conv(inputs)  # [B, 1, H', W']
-        attn_weights = torch.sigmoid(attn_scores)
-        
-        # Aplicar pooling a la entrada: se obtiene una salida de tamaño [B, C, H', W']
-        pooled = F.avg_pool2d(inputs, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
-        
-        # Multiplicar la salida del pooling por los pesos de atención (broadcastable: [B, C, H', W'] * [B, 1, H', W'])
-        tensor = pooled * attn_weights
-        
-        if self.channels_last:
-            tensor = tensor.permute(0, 2, 3, 1)
-        
-        return tensor
-
-class AttentionPooling2(nn.Module):
-    """ Attention-Based Pooling layer """
-
-    def __init__(self, kernel=1, strides=1, channels_last=False):
-        """ Initialize AttentionPooling.
-
-        Args:
-            kernel : int
-                Represents the size of the pooling window (3 means [3,3])
-            strides : int
-                Represents the stride of the pooling window (3 means [3,3])
-            channels_last : bool
-                Whether the input tensor is in channels-last format (NHWC)
-        """
-        super().__init__()
-        self.kernel = kernel
-        self.strides = strides
-        self.padding = 0  # 'valid' no padding
-        self.channels_last = channels_last
-
-        # Learnable attention weights
-        self.attention_conv = nn.Conv2d(
-            in_channels=1,  # Treat each spatial location as a single channel
-            out_channels=1,
-            kernel_size=self.kernel,
-            stride=self.strides,
-            padding=self.padding,
-            bias=False
-        )
-
-    def forward(self, inputs):
-        """ Attention-Based Pooling layer.
-
-        Args:
-            inputs: input tensor to the block.
-
-        Returns:
-            output tensor.
-        """
-        if self.channels_last:
-            inputs = inputs.permute(0, 3, 1, 2)  # Convert NHWC to NCHW format
-
-        # Check if the image size is valid
-        if inputs.shape[2] < self.kernel or inputs.shape[3] < self.kernel:
-            return inputs  # Skip pooling if the image is too small
-
-        batch_size, channels, height, width = inputs.shape
-
-        # Compute attention weights
-        attention_input = inputs.mean(dim=1, keepdim=True)  # Average across channels
-        attention_weights = self.attention_conv(attention_input)  # Compute attention weights
-
-        # Reshape attention_weights to match the pooling output size
-        output_height = (height - self.kernel) // self.strides + 1
-        output_width = (width - self.kernel) // self.strides + 1
-        attention_weights = attention_weights.view(batch_size, -1)  # Flatten spatial dimensions
-        attention_weights = F.softmax(attention_weights, dim=-1)  # Softmax over spatial dimensions
-        attention_weights = attention_weights.view(batch_size, 1, output_height, output_width)  # Reshape to output size
-
-        # Apply pooling with attention weights
-        pooled = F.avg_pool2d(inputs, kernel_size=self.kernel, stride=self.strides, padding=self.padding)
-        output = pooled * attention_weights  # Weighted pooling
-
-        if self.channels_last:
-            output = output.permute(0, 2, 3, 1)  # Convert NCHW to NHWC format
-
-        return output
-
 class FullyConnected(nn.Module):
     def __init__(self,input_features=1, units=1):
         """ Initialize FullyConnected.
@@ -1073,111 +957,190 @@ class FullyConnected(nn.Module):
         tensor = self.fc(inputs)
         return tensor
     
+# ==============================
+# New Fixed Blocks Definitions
+# ==============================
+
+class StemBlock(nn.Module):
+    """
+    Fixed Stem block: a 3x3 convolution with downsampling, followed by BatchNorm and ReLU.
+    This block is intended to extract low-level features and reduce spatial dimensions.
+    """
+    def __init__(self, in_channels=3, filters=32, stride=2):
+        super(StemBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels, filters, kernel_size=3, stride=stride, padding=1)
+        init.kaiming_normal_(self.conv.weight, nonlinearity='relu')
+        self.bn = nn.BatchNorm2d(filters)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
+
+
+class TailBlock(nn.Module):
+    """
+    Fixed Tail block: a 3x3 convolution that aggregates extracted features.
+    Optionally applies Global Average Pooling (GAP) to reduce each feature map to a single value.
+    """
+    def __init__(self, in_channels, filters=None, use_gap=True):
+        super(TailBlock, self).__init__()
+        # If no specific number of filters is provided, maintain the same channel size.
+        if filters is None:
+            filters = in_channels
+        self.conv = nn.Conv2d(in_channels, filters, kernel_size=3, stride=1, padding=1)
+        init.kaiming_normal_(self.conv.weight, nonlinearity='relu')
+        self.bn = nn.BatchNorm2d(filters)
+        self.relu = nn.ReLU()
+        self.use_gap = use_gap
+        if self.use_gap:
+            self.gap = nn.AdaptiveAvgPool2d((1, 1))
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        if self.use_gap:
+            x = self.gap(x)
+        return x
+    
 class NoOp(nn.Module):
     """ NoOp layer.
     """
     pass
 
-functions_dict = {'ConvBlock': ConvBlock,
-                    'DWConvBlock': DWConvBlock,
-                    'SEConvBlock': SEConvBlock,
-                    'MBConv': MBConv,
-                    'MBConvV2': MBConv_V2,
-                    'MBEPPGA': MBConv_EPPGA,
-                    'ResidualV1': ResidualV1,
-                    'ResidualV1Pr': ResidualV1Pr,
-                    'CBAMConvBlock': CBAMConvBlock,
-                    'ResidualV1CBAM': ResidualV1CBAM,
-                    'CBAMBlock' : CBAMBlock,
-                    'MaxPooling': MaxPooling,
-                    'AvgPooling': AvgPooling,
-                    'FullyConnected': FullyConnected,
-                    'no_op': NoOp}
+functions_dict = {
+    'StemBlock': StemBlock,
+    'TailBlock': TailBlock,
+    'ConvBlock': ConvBlock,
+    'DWConvBlock': DWConvBlock,
+    'SEConvBlock': SEConvBlock,
+    'MBConv': MBConv,
+    'MBConvV2': MBConv_V2,
+    'MBEPPGA': MBConv_EPPGA,
+    'ResidualV1': ResidualV1,
+    'ResidualV1Pr': ResidualV1Pr,
+    'CBAMConvBlock': CBAMConvBlock,
+    'ResidualV1CBAM': ResidualV1CBAM,
+    'CBAMBlock' : CBAMBlock,
+    'MaxPooling': MaxPooling,
+    'AvgPooling': AvgPooling,
+    'StochasticPooling': StochasticPooling,
+    'FullyConnected': FullyConnected,
+    'no_op': NoOp}
 
 class NetworkGraph(nn.Module):
-    def __init__(self, num_classes, mu=0.9, epsilon=2e-5, in_channels=3):
+    def __init__(self, num_classes, in_channels=3, network_gap=False, network_config = 'default'):
         """ Initialize NetworkGraph.
 
         Args:
             num_classes: int 
                 number of classes for classification model.
-            mu: float
-                batch normalization decay; default = 0.9
-            epsilon: float  
-                batch normalization epsilon; default = 2e-5.
+            in_channels: int
+                number of input channels.
+            network_gap: bool
+                flag to apply Global Average Pooling (GAP) in the Tail block.
+            network_config: str
+                network configuration to use for the model.
         Returns:
             output logits tensor.
         """
         super().__init__()
 
         self.num_classes = num_classes
-        self.mu = mu
-        self.epsilon = epsilon
         self.in_channels = in_channels
-        #self.layer_dict = nn.ModuleDict()
+        self.use_gap = network_gap
+        self.network_config = network_config
+        self.layers = None
+        self.fc = None
+
         
     def create_functions(self, net_list, fn_dict, cbam=False):
-        """ Generate all possible functions from functions descriptions in *self.fn_dict*.
+        """ Dynamically create network layers.
 
         Args:
+            net_list: List of layer names.
             fn_dict: dict with definitions of the functions (name and parameters);
                 format --> {'fn_name': ['FNClass', {'param1': value1, 'param2': value2}]}.
+            cbam: Boolean flag to modify network for CBAM.
         """
+        # Define sets for blocks that need special handling.
+        primary_blocks = {
+            'ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM',
+            'MBConv', 'MBConvV2', 'MBConv_EPPGA', 'ResidualV1', 'ResidualV1Pr'
+        }
+        cbam_blocks = {'CBAMBlock'}
         in_channels = self.in_channels
         self.layers = []
-        if cbam:
-            # Fix the first layer with a 1x1 convolution 
+        # Optionally insert a 1x1 convolution for CBAM in default config.
+        if cbam and self.network_config == 'default':
             net_list.insert(0, 'conv_1_1_32')
             conv_1_1_info = {'conv_1_1_32': {'function': 'ConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}}}
             fn_dict.update(conv_1_1_info)
 
+        # Insert the fixed Stem block at the beginning.
+        if self.network_config == 'config1':
+            stem_params = {
+                'in_channels': in_channels,
+                'filters': 32,       
+                'stride': 1,         # Downsampling via stride 2.
+            }
+            self.layers.append(StemBlock(**stem_params))
+            in_channels = stem_params['filters']  # Update in_channels based on the Stem block's output.
+
         for name in net_list:
             parameters = fn_dict[name]
-            if parameters['function'] == 'NoOp':
+            func = parameters['function']  # Cache the function name
+            if func == 'NoOp':
                 continue
-            if parameters['function'] in ['ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM','MBConv','MBConvV2','MBEPPGA','ResidualV1', 'ResidualV1Pr']:
-                parameters['params']['mu'] = self.mu
-                parameters['params']['epsilon'] = self.epsilon
+
+            if func in primary_blocks:
                 parameters['params']['in_channels'] = in_channels
                 in_channels = parameters['params']['filters']
-            
-            if parameters['function'] in ['CBAMBlock']:
+            elif func in cbam_blocks:
                 parameters['params']['in_channels'] = in_channels
 
-            self.layers.append(functions_dict[parameters['function']](**parameters['params']))
+            self.layers.append(functions_dict[func](**parameters['params']))
+
+        if self.network_config == 'config1':
+            # Append the fixed Tail block at the end.
+            tail_params = {
+                'in_channels': in_channels,
+                'filters': in_channels,  
+                'use_gap': self.use_gap   
+            }
+            self.layers.append(TailBlock(**tail_params))
+
         self.model = nn.Sequential(*self.layers)
         self.fc = None
 
 
     def forward(self, inputs, debug=False):
-        """ Create a PyTorch network from a list of layer names.
-
-        Args:
-            net_list: list of layer names, representing the network layers.
-            inputs: input tensor to the network.
-
-        Returns:
-            logits tensor.
         """
-        #print(f'inputs.shape: {inputs.shape}')
+        Forward pass through the network.
+        
+        Args:
+            inputs: Input tensor.
+            debug: Boolean flag for printing debug information.
+        
+        Returns:
+            Logits tensor.
+        """
         if debug:
-            for f in self.layers:
-                print(f'f: {f}')
-                inputs = f(inputs)
-                print(f'layer output.shape: {inputs.shape}')
+            for layer in self.layers:
+                inputs = layer(inputs)
+                print(f'Layer output shape: {inputs.shape}')
         else:
-            inputs = self.model(inputs) # BUG: the model is not being updated when the dataset is not downloaded before running the training
-            #print(f'layer output.shape: {inputs.shape}')
-
+            inputs = self.model(inputs)
+        
+        # Optimized flattening: torch.flatten handles both GAP and non-GAP cases.
+        inputs = torch.flatten(inputs, 1)
+        
+        # Initialize the FullyConnected layer if not already created.
         if self.fc is None:
-            batch_size, num_features, height, width = inputs.size()
-            num_flat_features = num_features * height * width
-            self.fc = FullyConnected(input_features=num_flat_features, units=self.num_classes)
-
-        batch_size = inputs.size(0)
-        inputs = inputs.reshape(batch_size, -1)
-        #print('FullyConnected')
-        #print(f'layer output.shape: {inputs.shape}')
+            self.fc = FullyConnected(input_features=inputs.size(1), units=self.num_classes)
+        
         logits = self.fc(inputs)
-
         return logits

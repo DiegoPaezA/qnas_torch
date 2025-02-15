@@ -105,6 +105,11 @@ if __name__ == '__main__':
                         help='Number of workers to be used during data loading. Default = 4.')
     parser.add_argument('--save_checkpoints_epochs', type=int, default=5,
                         help='Number of epochs to save the model. Default = 10.')
+    
+    parser.add_argument('--network_gap', action='store_true',
+                    help='Enable network gap during evolution. Default = False.')
+    parser.add_argument('--network_config', type=str, required=True,  help='Network structure configuration.', default='default',
+                        choices=['default', 'config1'])
     arguments = parser.parse_args()
 
     main(**vars(arguments))

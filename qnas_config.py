@@ -116,6 +116,10 @@ class ConfigParameters(object):
                                 ('mo_metric_base', str),
                                 ('data_augmentation', bool),
                                 ('subtract_mean', bool),
+                                ('limit_data', bool),
+                                ('limit_data_value', int),
+                                ('network_gap', bool),
+                                ('network_config', str),
                                 ('save_checkpoints_epochs', int),
                                 ('save_summary_epochs', float),
                                 ('threads', int)]}
@@ -159,9 +163,12 @@ class ConfigParameters(object):
         self.train_spec['fitness_metric'] = self.args['fitness_metric']
         self.train_spec['optimizer'] = self.args['optimizer']
         self.train_spec['data_augmentation'] = self.args['data_augmentation']
+        self.train_spec['network_config'] = self.args['network_config']
+        self.train_spec['network_gap'] = self.args['network_gap']
         self.train_spec['save_checkpoints_epochs'] = self.args['save_checkpoints_epochs']
         self.train_spec['dataset'] = self.args['dataset']
         self.train_spec['data_path'] = self.args['data_path']
+        self.train_spec['limit_data_value'] = self.args['limit_data_value']
         
         
 

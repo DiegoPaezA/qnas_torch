@@ -80,6 +80,12 @@ if __name__ == '__main__':
                     help='Enable population crossover during evolution. Default = False.') 
     parser.add_argument('--save_checkpoints_epochs', type=int, default=5,
                         help='Number of epochs to save the model. Default = 5.')
+    parser.add_argument('--limit_data_value', type=int, default=10000,
+                        help='Number of samples to be used during evolution and training. Default = 10000.')
+    parser.add_argument('--network_gap', action='store_true',
+                    help='Enable network gap during evolution. Default = False.')
+    parser.add_argument('--network_config', type=str, required=True,  help='Network structure configuration.', default='default',
+                        choices=['default', 'config1'])
 
     arguments = parser.parse_args()
 

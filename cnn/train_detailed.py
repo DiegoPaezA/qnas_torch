@@ -91,7 +91,9 @@ def compute_metrics(model, data_loader, params):
 def reset_and_load_best_model(params, best_model_path):
     # Reinitialize the original model
     
-    best_model = model.NetworkGraph(num_classes=params["num_classes"], mu=0.99)
+    best_model = model.NetworkGraph(num_classes=params["num_classes"],
+                                    network_config=params['network_config'], 
+                                    network_gap=params['network_gap'])
     filtered_dict = {key: item for key, item in params['fn_dict'].items() if key in params['net_list']}
     best_model.create_functions(fn_dict=filtered_dict, net_list=params['net_list'])
 
@@ -329,8 +331,10 @@ def train_and_eval(params: Dict[str, Any],
     else:
         dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
     
-
-    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)
+    # Create the model
+    model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'], 
+                                   network_config=params['network_config'], 
+                                   network_gap=params['network_gap'])
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 

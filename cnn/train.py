@@ -266,8 +266,10 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     # check if cbam is a key in the fn_dict
     has_cbam_key = any(key.startswith('cbam') for key in fn_dict)
     
-    # Create the model
-    model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'])    
+    # Create the model    
+    model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'], 
+                                   network_config=params['network_config'], 
+                                   network_gap=params['network_gap'])
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list, cbam=has_cbam_key)
     
