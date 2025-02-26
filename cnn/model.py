@@ -153,7 +153,7 @@ class SEBlock(nn.Module):
 class ConvBlock(nn.Module):
     """ Convolutional Block with Conv -> BatchNorm -> ReLU """
 
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, channels_last=False):
         """ Initialize ConvBlock.
 
         Args:
@@ -174,8 +174,6 @@ class ConvBlock(nn.Module):
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         self.activation = nn.ReLU()
         self.channels_last = channels_last
@@ -211,7 +209,7 @@ class ConvBlock(nn.Module):
 class DefConvBlock(nn.Module):
     """ Deformable Convolutional Block with DeformConv -> BatchNorm -> ReLU """
 
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, channels_last=False):
         """ Initialize DeformableConvBlock.
 
         Args:
@@ -232,8 +230,6 @@ class DefConvBlock(nn.Module):
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         self.activation = nn.ReLU()
         self.channels_last = channels_last
@@ -278,7 +274,7 @@ class SEConvBlock(nn.Module):
     """
     Squeeze-and-Excitation Convolution Block.
     """
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, channels_last=False, reduction_ratio=16):
         """
         Initializes the Squeeze-and-Excitation Convolution block.
 
@@ -291,7 +287,7 @@ class SEConvBlock(nn.Module):
             reduction_ratio (int, optional): Reduction ratio for the SE block. Default is 16.
         """
         super(SEConvBlock, self).__init__()
-        self.conv_block = ConvBlock(kernel, in_channels, filters, strides, mu, epsilon, channels_last)
+        self.conv_block = ConvBlock(kernel, in_channels, filters, strides, channels_last)
         self.se_block = SEBlock(filters, reduction_ratio)
 
     def forward(self, inputs):
@@ -321,10 +317,10 @@ class CBAMConvBlock(nn.Module):
         reduction_ratio (int, optional): Reduction ratio for the channel attention block. Default is 16.
     """
 
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False, reduction_ratio=16):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, channels_last=False, reduction_ratio=16):
         super(CBAMConvBlock, self).__init__()
 
-        self.conv_block = ConvBlock(kernel, in_channels, filters, strides,mu, epsilon, channels_last)
+        self.conv_block = ConvBlock(kernel, in_channels, filters, strides, channels_last)
         self.cbam_block = CBAMBlock(filters, reduction_ratio)
 
     def forward(self, x):
@@ -349,7 +345,7 @@ class CBAMConvBlock(nn.Module):
 class DWConvBlock(nn.Module):
     """ Depth Wise Separable Convolutional Block with Conv -> DepthwiseConv -> BatchNorm -> ReLU """
 
-    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, kernel=1, in_channels=1, filters=1, strides=1, channels_last=False):
         """ Initialize DepthwiseSeparableConvBlock.
 
         Args:
@@ -370,8 +366,6 @@ class DWConvBlock(nn.Module):
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         self.activation = nn.ReLU()
         self.channels_last = channels_last
@@ -413,7 +407,7 @@ class MBConv(nn.Module):
     """
     MobileNetV3 Bottleneck Block with Squeeze-and-Excitation (SE) Block.
     """
-    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
+    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, expand_ratio=6, reduction_ratio=16):
         super(MBConv, self).__init__()
         mid_channels = in_channels * expand_ratio
 
@@ -467,7 +461,7 @@ class MBConv_V2(nn.Module):
     Ref 1: Effective Data Augmentation and Training Techniques for Improving Deep Learning in Plant Leaf Disease Recognition
     link: https://tinyurl.com/2axqr4cl
     """
-    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
+    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, expand_ratio=6, reduction_ratio=16):
         super(MBConv_V2, self).__init__()
         mid_channels = in_channels * expand_ratio
 
@@ -515,7 +509,7 @@ class MBConv_EPPGA(nn.Module):
     Ref: An evolutionary neural architecture search method based on performance prediction and weight inheritance
     link: https://www.sciencedirect.com/science/article/pii/S0020025524003797
     """
-    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, mu=1, epsilon=1, expand_ratio=6, reduction_ratio=16):
+    def __init__(self,kernel=1, in_channels=1, filters=1, strides=1, expand_ratio=6, reduction_ratio=16):
         super(MBConv_EPPGA, self).__init__()
         mid_channels = in_channels * expand_ratio
 
@@ -564,13 +558,11 @@ class MBConv_EPPGA(nn.Module):
         return out
     
 class ResidualV1(nn.Module):
-    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, channels_last=False):
         super().__init__()
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
         self.channels_last = channels_last
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
@@ -619,7 +611,7 @@ class ResidualV1(nn.Module):
 
 class ResidualV1CBAM(nn.Module):
     """ Residual Block with Conv -> BatchNorm -> ReLU -> Conv -> BatchNorm -> CBAM -> Add -> ReLU """
-    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, channels_last=False):
         """ Initialize ResidualV1.
 
         Args:
@@ -640,8 +632,6 @@ class ResidualV1CBAM(nn.Module):
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
         self.channels_last = channels_last
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
@@ -702,7 +692,7 @@ class ResidualV1CBAM(nn.Module):
     
 class ResidualV1Pr(nn.Module):
     """ Residual V1 block with projection shortcut """
-    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, mu=1, epsilon=1, channels_last=False):
+    def __init__(self, in_channels=1, kernel=1, filters=1, strides=1, channels_last=False):
         """ Initialize ResidualV1.
 
         Args:
@@ -723,8 +713,6 @@ class ResidualV1Pr(nn.Module):
         self.kernel_size = kernel
         self.filters = filters
         self.strides = strides
-        self.batch_norm_mu = mu
-        self.batch_norm_epsilon = epsilon
         self.channels_last = channels_last
         self.padding = (self.kernel_size - 1) // 2 # Calculate "same" padding
         
@@ -1019,7 +1007,7 @@ functions_dict = {
     'SEConvBlock': SEConvBlock,
     'MBConv': MBConv,
     'MBConvV2': MBConv_V2,
-    'MBEPPGA': MBConv_EPPGA,
+    'MBConv_EPPGA': MBConv_EPPGA,
     'ResidualV1': ResidualV1,
     'ResidualV1Pr': ResidualV1Pr,
     'CBAMConvBlock': CBAMConvBlock,
@@ -1071,7 +1059,6 @@ class NetworkGraph(nn.Module):
             'ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM',
             'MBConv', 'MBConvV2', 'MBConv_EPPGA', 'ResidualV1', 'ResidualV1Pr'
         }
-        cbam_blocks = {'CBAMBlock'}
         in_channels = self.in_channels
         self.layers = []
         # Optionally insert a 1x1 convolution for CBAM in default config.
@@ -1099,7 +1086,7 @@ class NetworkGraph(nn.Module):
             if func in primary_blocks:
                 parameters['params']['in_channels'] = in_channels
                 in_channels = parameters['params']['filters']
-            elif func in cbam_blocks:
+            elif func == 'CBAMBlock':
                 parameters['params']['in_channels'] = in_channels
 
             self.layers.append(functions_dict[func](**parameters['params']))
