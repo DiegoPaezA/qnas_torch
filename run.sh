@@ -2,13 +2,15 @@
 
 # Define common variables for the evolution experiments
 dataset="cifar10"
-exp_path_base="experiment_${dataset}_acc_7"
+exp_path_base="experiment_${dataset}_acc_17"
 config_file="config_files_cifar"
 fitness_metric="best_accuracy"
 data_path="${dataset}_data"
 log_level="INFO"
+network_config="default"
+dataset_sample_size=10000
 
-configs=("config0.txt")
+configs=("config15.txt")
 exps=("exp1")
 cuda_devices=("0")
 
@@ -28,8 +30,10 @@ for ((j=0; j<${#configs[@]}; j++)); do
             --config_file "${config_file}/${config}" \
             --data_path "$data_path" \
             --dataset "$dataset" \
+            --limit_data_value "$dataset_sample_size" \
             --fitness_metric "$fitness_metric" \
             --early_stopping \
+            --network_config "$network_config" \
             --en_pop_crossover \
             --log_level "$log_level"
     done

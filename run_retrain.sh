@@ -1,14 +1,18 @@
 #!/bin/bash
 
 # Define variables for retrain experiment
-dataset="atleta_coronal"
-exp="exp5"
+dataset="cifar10"
+network_config="default"
+
+exp_num="16"
+exp="exp1"
+
 repeat="1"
-echo "Starting $exp F13 repeat $repeat"
-exp_path="experiments_${dataset}_v3/${exp}_repeat_${repeat}"
+echo "Starting $exp_num F13 repeat $repeat"
+exp_path="experiment_${dataset}_acc_${exp_num}/${exp}_repeat_${repeat}"
 
 # Retrain model
-CUDA_VISIBLE_DEVICES=2 python retrain_model.py \
+CUDA_VISIBLE_DEVICES=1 python retrain_model.py \
     --experiment_path "$exp_path" \
     --data_path "${dataset}_data" \
     --dataset "$dataset" \
@@ -16,13 +20,59 @@ CUDA_VISIBLE_DEVICES=2 python retrain_model.py \
     --config_code F13 \
     --log_level INFO \
     --max_epochs 300 \
-    --batch_size 32 \
-    --eval_batch_size 16 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
     --device cuda:0 \
     --num_repetitions 3 \
     --lr_scheduler "multistep" \
     --data_augmentation \
+    --network_config "$network_config" \
     --optimizer "AdamW"
+
+
+repeat="2"
+echo "Starting $exp_num F13 repeat $repeat"
+exp_path="experiment_${dataset}_acc_${exp_num}/${exp}_repeat_${repeat}"
+
+# Retrain model
+CUDA_VISIBLE_DEVICES=1 python retrain_model.py \
+    --experiment_path "$exp_path" \
+    --data_path "${dataset}_data" \
+    --dataset "$dataset" \
+    --retrain_folder retrain \
+    --config_code F13 \
+    --log_level INFO \
+    --max_epochs 300 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --device cuda:0 \
+    --num_repetitions 3 \
+    --lr_scheduler "multistep" \
+    --data_augmentation \
+    --network_config "$network_config" \
+    --optimizer "AdamW"
+
+repeat="3"
+echo "Starting $exp_num F13 repeat $repeat"
+exp_path="experiment_${dataset}_acc_${exp_num}/${exp}_repeat_${repeat}"
+
+# Retrain model
+CUDA_VISIBLE_DEVICES=1 python retrain_model.py \
+    --experiment_path "$exp_path" \
+    --data_path "${dataset}_data" \
+    --dataset "$dataset" \
+    --retrain_folder retrain \
+    --config_code F13 \
+    --log_level INFO \
+    --max_epochs 300 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --device cuda:0 \
+    --num_repetitions 3 \
+    --lr_scheduler "multistep" \
+    --data_augmentation \
+    --network_config "$network_config" \
+    --optimizer "AdamW"    
 
 # Check if the previous command was successful
 if [ $? -ne 0 ]; then
