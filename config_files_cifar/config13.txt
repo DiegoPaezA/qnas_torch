@@ -74,4 +74,4 @@ train:
 
     # Network structure Configuration
     network_config: default
-    network_gap = False
+    network_gap: False
