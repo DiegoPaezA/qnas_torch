@@ -1059,51 +1059,85 @@ class NetworkGraph(nn.Module):
             'ConvBlock', 'DWConvBlock', 'SEConvBlock', 'ResidualV1CBAM',
             'MBConv', 'MBConvV2', 'MBConv_EPPGA', 'ResidualV1', 'ResidualV1Pr'
         }
-        in_channels = self.in_channels
-        self.layers = []
-        # Optionally insert a 1x1 convolution for CBAM in default config.
-        if cbam and self.network_config == 'default':
-            net_list.insert(0, 'conv_1_1_32')
-            conv_1_1_info = {'conv_1_1_32': {'function': 'ConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}}}
-            fn_dict.update(conv_1_1_info)
+        if self.network_config == 'default':
+            in_channels = self.in_channels
+            self.layers = []
+            # Optionally insert a 1x1 convolution for CBAM in default config.
+            if cbam:
+                net_list.insert(0, 'conv_1_1_32')
+                conv_1_1_info = {'conv_1_1_32': {'function': 'ConvBlock', 'params': {'kernel': 1, 'strides': 1, 'filters': 32}}}
+                fn_dict.update(conv_1_1_info)
 
-        # Insert the fixed Stem block at the beginning.
-        if self.network_config == 'config1':
+
+            for name in net_list:
+                parameters = fn_dict[name]
+                func = parameters['function']  # Cache the function name
+                if func == 'NoOp':
+                    continue
+
+                if func in primary_blocks:
+                    parameters['params']['in_channels'] = in_channels
+                    in_channels = parameters['params']['filters']
+                elif func == 'CBAMBlock':
+                    parameters['params']['in_channels'] = in_channels
+
+                self.layers.append(functions_dict[func](**parameters['params']))
+                
+            self.model = nn.Sequential(*self.layers)
+            self.fc = None
+        elif self.network_config == 'dense':
+            # Dense connectivity: use a ModuleList and build cumulative channels.
+            cumulative_channels = self.in_channels  # e.g., initial channels (e.g., 3)
+            self.layers = []  # List to store layers
+
+            # Insert Stem block if desired.
             stem_params = {
-                'in_channels': in_channels,
-                'filters': 32,       
-                'stride': 1,         # Downsampling via stride 2.
+                'in_channels': cumulative_channels,
+                'filters': 32,
+                'stride': 1,
             }
             self.layers.append(StemBlock(**stem_params))
-            in_channels = stem_params['filters']  # Update in_channels based on the Stem block's output.
+            cumulative_channels += stem_params['filters']  # Add stem's output channels
 
-        for name in net_list:
-            parameters = fn_dict[name]
-            func = parameters['function']  # Cache the function name
-            if func == 'NoOp':
-                continue
+            # For each layer, update parameters based on whether it is a pooling operation.
+            for name in net_list:
+                parameters = fn_dict[name]
+                #print(f'Function name: {parameters["function"]}')
+                if parameters['function'] == 'NoOp':
+                    continue
 
-            if func in primary_blocks:
-                parameters['params']['in_channels'] = in_channels
-                in_channels = parameters['params']['filters']
-            elif func == 'CBAMBlock':
-                parameters['params']['in_channels'] = in_channels
+                # Make a copy of the parameters to avoid modifying the original dictionary.
+                params = parameters['params'].copy()
 
-            self.layers.append(functions_dict[func](**parameters['params']))
+                # If the function name indicates a pooling operation, remove "in_channels"
+                if "pool" in parameters['function'].lower():
+                    # Remove in_channels if it exists (pooling layers don't expect it)
+                    params.pop('in_channels', None)
+                    # Do not update cumulative_channels (pooling doesn't change channel count)
+                else:
+                    # For non-pooling blocks, override in_channels with the current cumulative count.
+                    params['in_channels'] = cumulative_channels
+                    # If the block defines an output channel count, update cumulative_channels.
+                    if 'filters' in params:
+                        cumulative_channels += params['filters']
 
-        if self.network_config == 'config1':
-            # Append the fixed Tail block at the end.
+                #print(f'Instantiating {parameters["function"]} with params: {params}')
+                self.layers.append(functions_dict[parameters['function']](**params))
+
+            # Optionally add a Tail block.
             tail_params = {
-                'in_channels': in_channels,
-                'filters': in_channels,  
-                'use_gap': self.use_gap   
+                'in_channels': cumulative_channels,
+                'filters': cumulative_channels,
+                'use_gap': self.use_gap
             }
             self.layers.append(TailBlock(**tail_params))
 
-        self.model = nn.Sequential(*self.layers)
-        self.fc = None
-
-
+            # Wrap layers in a ModuleList for custom forward pass.
+            self.layers = nn.ModuleList(self.layers)
+            self.model = None  # Not using a sequential model.
+            self.fc = None     # Fully connected layer will be initialized later.
+        else:
+            raise ValueError(f"Invalid network configuration: {self.network_config}")
     def forward(self, inputs, debug=False):
         """
         Forward pass through the network.
@@ -1115,19 +1149,47 @@ class NetworkGraph(nn.Module):
         Returns:
             Logits tensor.
         """
-        if debug:
+        if self.network_config == 'default':
+            # Standard forward using self.model.
+            if debug:
+                for layer in self.model:
+                    inputs = layer(inputs)
+                    print(f'Layer output shape: {inputs.shape}')
+            else:
+                inputs = self.model(inputs)
+        elif self.network_config == 'dense':
+            # Dense connectivity: accumulate features in a list.
+            features = [inputs]
             for layer in self.layers:
-                inputs = layer(inputs)
-                print(f'Layer output shape: {inputs.shape}')
-        else:
-            inputs = self.model(inputs)
+                # Compute common spatial size among all current features.
+                common_h = min(feat.shape[2] for feat in features)
+                common_w = min(feat.shape[3] for feat in features)
+                # Resize all features to the common size.
+                resized_features = [F.interpolate(feat, size=(common_h, common_w),
+                                                mode='bilinear', align_corners=False)
+                                    for feat in features]
+                # Concatenate along the channel dimension.
+                concatenated = torch.cat(resized_features, dim=1)
+                out = layer(concatenated)
+                # If the current layer is a pooling operation, reset the features list.
+                if isinstance(layer, (AvgPooling, MaxPooling, StochasticPooling)):
+                    features = [out]
+                else:
+                    features.append(out)
+                if debug:
+                    print(f"{layer.__class__.__name__}: concatenated shape = {concatenated.shape}, "
+                        f"output shape = {out.shape}")
+            
+            # Before the FC layer, adjust all features to a common spatial size.
+            common_h = min(feat.shape[2] for feat in features)
+            common_w = min(feat.shape[3] for feat in features)
+            adjusted_features = [F.interpolate(feat, size=(common_h, common_w),
+                                            mode='bilinear', align_corners=False)
+                                for feat in features]
+            inputs = torch.cat(adjusted_features, dim=1)
         
-        # Optimized flattening: torch.flatten handles both GAP and non-GAP cases.
         inputs = torch.flatten(inputs, 1)
-        
-        # Initialize the FullyConnected layer if not already created.
         if self.fc is None:
             self.fc = FullyConnected(input_features=inputs.size(1), units=self.num_classes)
-        
         logits = self.fc(inputs)
         return logits
