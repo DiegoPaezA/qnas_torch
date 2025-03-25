@@ -58,7 +58,8 @@ class QNAS(object):
     def initialize_qnas(self, num_quantum_ind, params_ranges, repetition, max_generations,
                         crossover_rate, update_quantum_gen, replace_method, fn_list,
                         initial_probs, update_quantum_rate, max_num_nodes, reducing_fns_list,
-                        patience,early_stopping, save_data_freq=0, penalize_number=0):
+                        patience,early_stopping, save_data_freq=0, penalize_number=0, crossover_frequency = 5,
+                        en_pop_crossover=False,pop_crossover_rate=0.25, pop_crossover_method='hux'):
 
         """ Initialize algorithm with several parameter values.
 
@@ -91,6 +92,13 @@ class QNAS(object):
                 stop the evolution.
             early_stopping: (bool) if True, the evolution will stop if the best fitness does not
                 improve by at least 0.005 (0.5%) for *patience* generations.
+            en_pop_crossover: (bool) if True, there will be crossover between the best individuals
+                of the current and new populations.
+            crossover_frequency: (int) frequency of crossover in the population of networks.
+            pop_crossover_rate: (float) crossover rate for the population of networks, used to select
+                the number of offspring to generate in the crossover [0 - 1].
+            pop_crossover_method: (str) one of 'hux' or 'uniform', indicating the method to
+                apply crossover in the population of networks.
         """
 
         self.generations = max_generations
@@ -99,27 +107,32 @@ class QNAS(object):
         self.penalize_number = penalize_number
         self.patience = patience
         self.early_stopping = early_stopping
+        self.en_pop_crossover = en_pop_crossover
+        self.pop_crossover_rate = pop_crossover_rate
+        self.crossover_frequency = crossover_frequency
 
         if reducing_fns_list:
             self.penalties = np.zeros(shape=(num_quantum_ind * repetition))
             self.reducing_fns_list = [i for i in range(len(fn_list))
-                                      if fn_list[i] in reducing_fns_list]
+                                    if fn_list[i] in reducing_fns_list]
 
         if save_data_freq:
             self.save_data_freq = save_data_freq
 
         self.qpop_params = QPopulationParams(num_quantum_ind=num_quantum_ind,
-                                             params_ranges=params_ranges,
-                                             repetition=repetition,
-                                             crossover_rate=crossover_rate,
-                                             update_quantum_rate=update_quantum_rate)
+                                            params_ranges=params_ranges,
+                                            repetition=repetition,
+                                            crossover_rate=crossover_rate,
+                                            update_quantum_rate=update_quantum_rate)
 
         self.qpop_net = QPopulationNetwork(num_quantum_ind=num_quantum_ind,
-                                           max_num_nodes=max_num_nodes,
-                                           repetition=repetition,
-                                           update_quantum_rate=update_quantum_rate,
-                                           fn_list=fn_list,
-                                           initial_probs=initial_probs)
+                                            max_num_nodes=max_num_nodes,
+                                            repetition=repetition,
+                                            update_quantum_rate=update_quantum_rate,
+                                            fn_list=fn_list,
+                                            initial_probs=initial_probs, 
+                                            crossover_method=pop_crossover_method)
+                                            
 
     def replace_pop(self, new_pop_params, new_pop_net, new_fitnesses, raw_fitnesses):
         """ Replace the individuals of old population using one of two methods: elitism or
@@ -153,13 +166,13 @@ class QNAS(object):
                 select_new = range(new_fitnesses.shape[0] - 1)
                 new_fitnesses, raw_fitnesses, new_pop_params, \
                     new_pop_net = self.order_pop(new_fitnesses,
-                                                 new_pop_params,
-                                                 new_pop_net,
-                                                 select_new)
+                                                new_pop_params,
+                                                new_pop_net,
+                                                select_new)
                 selected = range(1)
             elif self.replace_method == 'best':
                 selected = range(self.fitnesses.shape[0])
-
+                
             # Concatenate populations
             self.fitnesses = np.concatenate((self.fitnesses[selected], new_fitnesses))
             self.raw_fitnesses = np.concatenate((self.raw_fitnesses[selected], raw_fitnesses))
@@ -167,15 +180,19 @@ class QNAS(object):
                     (self.qpop_params.current_pop[selected], new_pop_params))
             self.qpop_net.current_pop = np.concatenate(
                     (self.qpop_net.current_pop[selected], new_pop_net))
-
+        
+        ## TODO: Here we have the the last and new population Multi objective operation
+        
+            
         # Order the population based on fitness
         num_classic = self.qpop_params.num_ind * self.qpop_params.repetition
         self.fitnesses, self.raw_fitnesses, self.qpop_params.current_pop, \
             self.qpop_net.current_pop = self.order_pop(self.fitnesses,
-                                                       self.raw_fitnesses,
-                                                       self.qpop_params.current_pop,
-                                                       self.qpop_net.current_pop,
-                                                       selection=range(num_classic))
+                                                        self.raw_fitnesses,
+                                                        self.qpop_params.current_pop,
+                                                        self.qpop_net.current_pop,
+                                                        selection=range(num_classic))       
+        
         self.best_so_far = self.fitnesses[0]
 
     @staticmethod
@@ -234,6 +251,14 @@ class QNAS(object):
                                                                 distance=self.random)
         # Generate classical pop for network structure
         new_pop_net = self.qpop_net.generate_classical()
+        
+        ###---Cross-over for network structure---###
+        if self.current_gen > 0 and self.en_pop_crossover:
+            if self.current_gen % self.crossover_frequency == 0:
+                num_offspring = int(len(new_pop_net) * self.pop_crossover_rate)
+                best_current_pop = self.qpop_net.current_pop[:num_offspring]
+                new_pop_net[:num_offspring] = self.qpop_net.apply_crossover(best_current_pop, new_pop_net[:num_offspring])
+        
         self.logger.info("new population created =%s", new_pop_net)
         # Evaluate population
         new_fitnesses, raw_fitnesses = self.eval_pop(new_pop_params, new_pop_net)
@@ -306,7 +331,7 @@ class QNAS(object):
         for i, net in enumerate(pop_net):
             unique, counts = np.unique(net, return_counts=True)
             reducing_fns_count = np.sum([counts[i] for i in range(len(unique))
-                                         if unique[i] in self.reducing_fns_list])
+                                        if unique[i] in self.reducing_fns_list])
             # Penalize individual only if number of reducing layers exceed the maximum allowed
             if reducing_fns_count > self.penalize_number:
                 penalties[i] = reducing_fns_count - self.penalize_number
@@ -321,10 +346,10 @@ class QNAS(object):
         np.set_printoptions(precision=4)
 
         self.logger.info(f'New generation finished running!\n\n'
-                         f'- Generation: {self.current_gen}\n'
-                         f'- Best so far: {self.best_so_far_id} --> {self.best_so_far:.5f}\n'
-                         f'- Fitnesses: {self.fitnesses}\n'
-                         f'- Fitnesses without penalties: {self.raw_fitnesses}\n')
+                        f'- Generation: {self.current_gen}\n'
+                        f'- Best so far: {self.best_so_far_id} --> {self.best_so_far:.5f}\n'
+                        f'- Fitnesses: {self.fitnesses}\n'
+                        f'- Fitnesses without penalties: {self.raw_fitnesses}\n')
 
     def save_data(self):
         """ Save QNAS data in a pickle file for logging and reloading purposes, including
@@ -339,17 +364,17 @@ class QNAS(object):
             data = load_pkl(self.data_file)
 
         data[self.current_gen] = {'time': str(datetime.datetime.now()),
-                                  'total_eval': self.total_eval,
-                                  'best_so_far': self.best_so_far,
-                                  'best_so_far_id': self.best_so_far_id,
-                                  'fitnesses': self.fitnesses,
-                                  'raw_fitnesses': self.raw_fitnesses,
-                                  'lower': self.qpop_params.lower,
-                                  'upper': self.qpop_params.upper,
-                                  'params_pop': self.qpop_params.current_pop,
-                                  'net_probs': self.qpop_net.probabilities,
-                                  'num_net_nodes': self.qpop_net.chromosome.num_genes,
-                                  'net_pop': self.qpop_net.current_pop}
+                                'total_eval': self.total_eval,
+                                'best_so_far': self.best_so_far,
+                                'best_so_far_id': self.best_so_far_id,
+                                'fitnesses': self.fitnesses,
+                                'raw_fitnesses': self.raw_fitnesses,
+                                'lower': self.qpop_params.lower,
+                                'upper': self.qpop_params.upper,
+                                'params_pop': self.qpop_params.current_pop,
+                                'net_probs': self.qpop_net.probabilities,
+                                'num_net_nodes': self.qpop_net.chromosome.num_genes,
+                                'net_pop': self.qpop_net.current_pop}
 
         self.dump_pkl_data(data)
 
@@ -422,18 +447,6 @@ class QNAS(object):
 
             self.qpop_params.update_quantum(intensity=self.random)
             self.qpop_net.update_quantum(intensity=self.random)
-
-    # def save_train_data(self):
-    #     """ Save loss and accuracy of best model of current generation in a csv file every
-    #         *self.save_data_freq* generations.
-    #     """
-
-    #     if np.remainder(self.current_gen, self.save_data_freq) == 0 and self.current_gen > 0:
-    #         input_dir = os.path.join(self.experiment_path,
-    #                                  f'{self.current_best_id[0]}_{self.current_best_id[1]}')
-    #         output_dir = os.path.join(self.experiment_path, 'csv_data')
-    #         extractor = ExtractData(input_dir=input_dir, output_dir=output_dir)
-    #         extractor.extract()
     
     def go_next_gen(self):
         """ Go to the next generation --> update quantum genes, log data, delete unnecessary
@@ -455,7 +468,8 @@ class QNAS(object):
         """ Run the evolution. """
         start_evolution = time.time()
         max_generations = self.generations
-        print(f"early stopping enable?: {self.early_stopping}")
+        #print(f"early stopping enable?: {self.early_stopping}")
+        #print(f"population crossover enable?: {self.en_pop_crossover}")
         
         # Update maximum number of generations if continue previous evolution process
         if self.current_gen > 0:

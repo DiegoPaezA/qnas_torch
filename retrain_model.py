@@ -42,7 +42,7 @@ def main(**args):
         logger.info(f"Retraining {experiment_path} repetition {i} ...")
         start_time = time.perf_counter()
         results_dict = train.train_and_eval(params=config.train_spec, fn_dict=config.fn_dict, net_list=config.evolved_params['net'], 
-                             train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)    
+                            train_loader=train_loader, val_loader=val_loader, test_loader=test_loader)    
         config.train_spec['experiment_path'] = os.path.join(experiment_path, f"retrain_{config_code}_{i+1}")
         
         end_time = time.perf_counter()
@@ -71,7 +71,7 @@ if __name__ == '__main__':
                         help='Directory where the evolved network logs are.')
     parser.add_argument('--data_path', type=str, required=True, help='Path to input data.')
     parser.add_argument('--dataset', type=str, required=True, help='Dataset name.', 
-                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist' ,'atleta_axial', 'atleta_coronal'])
+                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist','organcmnist','atleta_axial', 'atleta_coronal'])
     parser.add_argument('--retrain_folder', type=str, default='retrain',
                         help='Name of the folder with retrain model files that will be saved '
                              'inside *experiment_path*.')
@@ -105,6 +105,11 @@ if __name__ == '__main__':
                         help='Number of workers to be used during data loading. Default = 4.')
     parser.add_argument('--save_checkpoints_epochs', type=int, default=5,
                         help='Number of epochs to save the model. Default = 10.')
+    
+    parser.add_argument('--network_gap', action='store_true',
+                    help='Enable network gap during evolution. Default = False.')
+    parser.add_argument('--network_config', type=str, required=True,  help='Network structure configuration.', default='default',
+                        choices=['default', 'dense'])
     arguments = parser.parse_args()
 
     main(**vars(arguments))

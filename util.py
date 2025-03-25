@@ -4,6 +4,8 @@ import pickle as pkl
 import os
 import re
 import json
+import copy
+
 import time
 import matplotlib.pyplot as plt
 from shutil import rmtree
@@ -14,6 +16,13 @@ import torchvision.datasets
 from torchvision.transforms import ToTensor
 import medmnist
 from medmnist import INFO
+
+import gc
+import torch
+import torch.cuda as cuda
+from cnn import model, input
+import GPUtil
+
 
 def natural_key(string):
     """ Key to use with sort() in order to sort string lists in natural order.
@@ -87,6 +96,7 @@ def check_file_exists(file_path):
         return True
     else:
         return False
+
 def load_retrain_results(experiment_path, retrain_file_name):
     file_path = os.path.join(experiment_path, retrain_file_name)
     with open(file_path, 'r') as f:
@@ -108,7 +118,7 @@ def test_acc_mean_std(experiment_path, retrain_file_name):
     retrain_data = load_retrain_results(experiment_path, retrain_file_name)
     test_acc_mean = np.mean([retrain_data[key]['test_accuracy'] for key in retrain_data.keys()])
     test_acc_std = np.std([retrain_data[key]['test_accuracy'] for key in retrain_data.keys()])
-      
+    
     return test_acc_mean, test_acc_std    
 
 def agg_results(results_dict):
@@ -166,14 +176,14 @@ def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=Fals
             agg_results_dict = agg_results(results_dict)
             ax[0].plot(epochs, agg_results_dict["mean_training_losses"], label='Training', color='blue')
             ax[0].fill_between(epochs, 
-                               agg_results_dict["mean_training_losses"] - agg_results_dict["std_training_losses"], 
-                               agg_results_dict["mean_training_losses"] + agg_results_dict["std_training_losses"], 
-                               color='blue', alpha=0.2)
+                                agg_results_dict["mean_training_losses"] - agg_results_dict["std_training_losses"], 
+                                agg_results_dict["mean_training_losses"] + agg_results_dict["std_training_losses"], 
+                                color='blue', alpha=0.2)
             ax[0].plot(epochs, agg_results_dict["mean_validation_losses"], label='Validation', color='red')
             ax[0].fill_between(epochs, 
-                               agg_results_dict["mean_validation_losses"] - agg_results_dict["std_validation_losses"], 
-                               agg_results_dict["mean_validation_losses"] + agg_results_dict["std_validation_losses"], 
-                               color='red', alpha=0.2)
+                                agg_results_dict["mean_validation_losses"] - agg_results_dict["std_validation_losses"], 
+                                agg_results_dict["mean_validation_losses"] + agg_results_dict["std_validation_losses"], 
+                                color='red', alpha=0.2)
             ax[0].set_title('Loss')
             ax[0].set_xlabel('Epochs')
             ax[0].set_ylabel('Loss')
@@ -184,14 +194,14 @@ def plot_training_history(results_dict:dict, params:dict=None, retrain:bool=Fals
             
             ax[1].plot(epochs, agg_results_dict["mean_training_accuracies"], label='Training', color='blue')
             ax[1].fill_between(epochs, 
-                               agg_results_dict["mean_training_accuracies"] - agg_results_dict["std_training_accuracies"], 
-                               agg_results_dict["mean_training_accuracies"] + agg_results_dict["std_training_accuracies"], 
-                               color='blue', alpha=0.2)
+                                agg_results_dict["mean_training_accuracies"] - agg_results_dict["std_training_accuracies"], 
+                                agg_results_dict["mean_training_accuracies"] + agg_results_dict["std_training_accuracies"], 
+                                color='blue', alpha=0.2)
             ax[1].plot(epochs, agg_results_dict["mean_validation_accuracies"], label='Validation', color='red')
             ax[1].fill_between(epochs, 
-                               agg_results_dict["mean_validation_accuracies"] - agg_results_dict["std_validation_accuracies"], 
-                               agg_results_dict["mean_validation_accuracies"] + agg_results_dict["std_validation_accuracies"], 
-                               color='red', alpha=0.2)
+                                agg_results_dict["mean_validation_accuracies"] - agg_results_dict["std_validation_accuracies"], 
+                                agg_results_dict["mean_validation_accuracies"] + agg_results_dict["std_validation_accuracies"], 
+                                color='red', alpha=0.2)
             
             ax[1].axhline(y=test_acc_mean, color='green', linestyle='--', label='Test Accuracy')
             ax[1].text(epochs[-2], test_acc_mean+1, f'{test_acc_mean:.2f} ± {test_acc_std:.2f}', ha='right', va='center', color='black', fontsize=14)
@@ -264,7 +274,7 @@ def delete_old_dirs(path, keep_best=False, best_id=''):
     """
 
     folders = [os.path.join(path, d) for d in os.listdir(path)
-               if os.path.isdir(os.path.join(path, d)) and d[0].isdigit()]
+                if os.path.isdir(os.path.join(path, d)) and d[0].isdigit()]
     folders.sort(key=natural_key)
 
     if keep_best and best_id:
@@ -281,7 +291,7 @@ def check_files(exp_path):
     """
     if not os.path.exists(exp_path):
         raise OSError('User must provide a valid \"--experiment_path\" to continue '
-                      'evolution or to retrain a model.')
+                    'evolution or to retrain a model.')
     experiment_folders = [f.name for f in os.scandir(exp_path) if f.is_dir()]
     best_result_folder = [name for name in experiment_folders if name[0].isdigit()]
     best_result_folder = os.path.join(exp_path, best_result_folder[0])
@@ -291,7 +301,7 @@ def check_files(exp_path):
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:
             raise OSError('User must provide an \"--experiment_path\" with a valid data file to '
-                          'continue evolution or to retrain a model.')
+                        'continue evolution or to retrain a model.')
     else:
         raise OSError('training_params.txt not found!')
 
@@ -300,7 +310,7 @@ def check_files(exp_path):
     if os.path.exists(file_path):
         if os.stat(file_path).st_size == 0:
             raise OSError('User must provide an \"--experiment_path\" with a valid config_file '
-                          'to continue evolution or to retrain a model.')
+                        'to continue evolution or to retrain a model.')
     else:
         raise OSError('log_params_evolution.txt not found!')
     
@@ -324,7 +334,7 @@ def init_log(log_level, name, file_path=None):
         handler = logging.FileHandler(file_path)
 
     formatter = logging.Formatter('%(levelname)s: %(module)s: %(asctime)s.%(msecs)03d '
-                                  '- %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+                                '- %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
@@ -373,6 +383,98 @@ def load_evolved_data(experiment_path: str):
 
         return {'net': net_list, 'generation': generation, 'individual': individual, 'best_accuracy': best_acc}
     
+def load_retrain_results(experiment_path, retrain_file_name='retrain_results_F13_multistep.txt'):
+    """
+    Load and identify the best retrained model from a JSON results file, then
+    return the directory path, best model path, and its network definition.
+
+    Args:
+        experiment_path (str):
+            The path to the experiment folder containing retraining results.
+        retrain_file_name (str, optional):
+            The name of the JSON file that stores retrain results 
+            (keys map to experiment runs, values include test metrics).
+            Defaults to 'retrain_results_F13_multistep.txt'.
+
+    Returns:
+        dict:
+            A dictionary with:
+                - 'net': (list) the network layer definitions from the best run.
+                - 'retrain_path': (str) the folder where the best retraining logs 
+                and files are stored.
+                - 'best_model_path': (str) the file path to the best model checkpoint 
+                (`best_model.pth`) in the best retraining folder.
+
+    Raises:
+        FileNotFoundError:
+            If the determined best retrain folder does not exist, or if the JSON results file 
+            or `retraining_params.txt` file are missing or unreadable.
+    """
+    file_path = os.path.join(experiment_path, retrain_file_name)
+    with open(file_path, 'r') as f:
+        retrain_data = json.load(f)
+        
+    # Determine the key with the highest test accuracy
+    best_key = max(retrain_data, key=lambda x: retrain_data[x]['test_accuracy'])
+    
+    # Convert key naming (e.g., "multistep_F13_retrain_1" -> "retrain_F13_1")
+    parts = best_key.split("_")
+    best_key = f"{parts[2]}_{parts[1]}_{parts[3]}"
+    
+    # Construct path to the folder for the best retraining run
+    retrain_path = os.path.join(experiment_path, best_key)
+    if not os.path.exists(retrain_path):
+        raise FileNotFoundError(f"Could not find the retrain folder at {retrain_path}")
+    
+    # Load retraining params (YAML) within the best retraining folder
+    with open(os.path.join(retrain_path, 'retraining_params.txt'), 'r') as file:
+        best_retrain_info = yaml.safe_load(file)
+    
+    net_list = best_retrain_info.get('net_list', [])
+    
+    # Build the path to the best model file
+    best_model_path = os.path.join(retrain_path, 'best_model.pth')
+        
+    return {'net': net_list, 'retrain_path': retrain_path, 'best_model_path': best_model_path}
+
+    
+def load_log_params_evolution(experiment_path: str):
+    """
+    Loads the log parameters for the evolution process from the specified experiment path.
+
+    Parameters:
+    - experiment_path (str): The path to the experiment folder containing evolved data.
+
+    Returns:
+    dict: A dictionary containing the log parameters for the evolution process.
+
+    This method reads the log parameters for the evolution process from the
+    'log_params_evolution.txt' file. These typically include:
+        - train_spec  (dict)
+        - QNAS_spec   (dict)
+        - fn_dict     (dict)
+    among other possible keys like population size, generations, mutation rate, etc.
+    """
+
+    log_file = os.path.join(experiment_path, 'log_params_evolution.txt')
+    if not os.path.isfile(log_file):
+        raise FileNotFoundError(f"Could not find log_params_evolution.txt at {log_file}")
+
+    with open(log_file, 'r') as file:
+        log_params = yaml.safe_load(file)
+    
+    # Extract the subsets you need: train, QNAS, fn_dict
+    train_spec = dict(log_params['train'])
+    QNAS_spec = dict(log_params['QNAS'])    
+    fn_dict = log_params['fn_dict']
+
+    # Return them together in a dictionary (you can rename or restructure as you prefer):
+    return {
+        'train_spec': train_spec,
+        'QNAS_spec': QNAS_spec,
+        'fn_dict': fn_dict
+    }
+    
 def calculate_time(start_time, elapse_time,current_gen:int=0, max_generations:int=300, end_evol = True):
     """
     Calculate the elapsed time and the estimated remaining time in the evolution process.
@@ -386,7 +488,7 @@ def calculate_time(start_time, elapse_time,current_gen:int=0, max_generations:in
 
     Returns:
     tuple: If end_evol is True, returns a tuple (hours, minutes) representing the elapsed time.
-           If end_evol is False, returns a tuple (hours, minutes, remaining_total_hours, remaining_total_minutes) representing the elapsed time and the estimated remaining time.
+        If end_evol is False, returns a tuple (hours, minutes, remaining_total_hours, remaining_total_minutes) representing the elapsed time and the estimated remaining time.
     """
     
     total_time = elapse_time - start_time
@@ -409,8 +511,8 @@ def download_dataset(params: dict):
 
     Parameters:
     - params (dict): A dictionary containing the parameters for the dataset.
-      - 'data_path' (str): The path where the dataset should be stored.
-      - 'dataset' (str): The name of the dataset to be downloaded.
+        - 'data_path' (str): The path where the dataset should be stored.
+        - 'dataset' (str): The name of the dataset to be downloaded.
 
     If the dataset directory specified by 'data_path' does not exist, it will be created, 
     and the dataset will be downloaded. The function supports downloading datasets from 
@@ -439,5 +541,18 @@ def download_dataset(params: dict):
             dataset_class(root=data_path, split='train', download=True, transform=ToTensor(), as_rgb=True)
         else:
             raise ValueError(f"Dataset class {dataset_name} not found in torchvision.datasets or available_datasets.")
+        return False
     else:
-        print(f"Dataset {dataset_name} already downloaded.")    
+        return True
+
+def get_gpu_memory():
+    """
+    Retrieve GPU memory usage using GPUtil.
+    
+    Returns:
+    - Used memory in MB.
+    """
+    gpus = GPUtil.getGPUs()
+    if gpus:
+        return gpus[0].memoryUsed  # Assuming single-GPU use; modify if using multiple GPUs
+    return None

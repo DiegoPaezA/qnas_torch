@@ -15,9 +15,8 @@ from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
 from sklearn.metrics import confusion_matrix
 
-from cnn import model, input, model_resnet
+from cnn import model, input, model_resnet,  metrics
 from util import create_info_file, init_log, load_yaml
-from torch.profiler import profile, record_function, ProfilerActivity
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, MultiStepLR
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
@@ -28,17 +27,36 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'retrain_resnet.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
-def realese_gpu_memory(gpu_name='cuda:0'):
+def release_gpu_memory(gpu_name='cuda'):
     """
     Release GPU memory.
+    
+    Args:
+        gpu_name (str): The name of the GPU device (default is 'cuda').
     """
-    # Set the device to GPU named "cuda:1"
-    torch.cuda.set_device(gpu_name)
+    if not torch.cuda.is_available():
+        print("CUDA is not available. No GPU memory to release.")
+        return
+
+    device = torch.device(gpu_name)
+    torch.cuda.set_device(device)
+
+    # Obtener el uso de memoria antes de limpiar la caché
+    memory_allocated_before = torch.cuda.memory_allocated(device)
+    memory_reserved_before = torch.cuda.memory_reserved(device)
+
+    # Limpiar la caché
     torch.cuda.empty_cache()
 
-    # Print memory statistics
-    #print(f"Allocated GPU memory: {torch.cuda.memory_allocated() / (1024 ** 3):.2f} GB")
-    #print(f"Reserved GPU memory: {torch.cuda.memory_reserved() / (1024 ** 3):.2f} GB")
+    # Obtener el uso de memoria después de limpiar la caché
+    memory_allocated_after = torch.cuda.memory_allocated(device)
+    memory_reserved_after = torch.cuda.memory_reserved(device)
+
+    # Verificar si hubo un cambio significativo
+    if memory_allocated_before != memory_allocated_after or memory_reserved_before != memory_reserved_after:
+        print("Cache was cleared.")
+    else:
+        print("Cache was already empty.")
 
 def compute_metrics(model, data_loader, params):
     model.eval()
@@ -142,12 +160,12 @@ def evaluate(model, criterion, data_loader, params, test=False):
     return eval_loss, accuracy
 
 def train(model: torch.nn.Module,
-          criterion: torch.nn.Module,
-          optimizer: torch.optim.Optimizer,
-          train_loader: torch.utils.data.DataLoader,
-          val_loader: torch.utils.data.DataLoader,
-          test_loader: torch.utils.data.DataLoader,
-          params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
+        criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        test_loader: torch.utils.data.DataLoader,
+        params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
     """
     Retrain a convolutional neural network model.
 
@@ -214,7 +232,7 @@ def train(model: torch.nn.Module,
         validation_losses.append(validation_loss)
         validation_accuracies.append(accuracy)
         
-        if accuracy > best_accuracy and  epoch % params['save_checkpoints_epochs'] == 0: 
+        if accuracy > best_accuracy:
             best_accuracy = accuracy
             torch.save(model.state_dict(), best_model_path)
             create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
@@ -239,23 +257,20 @@ def train(model: torch.nn.Module,
     
     create_info_file(params['model_path'], params, 'retraining_params.txt')
     
-    # Measure inference time
-    inference_images = next(iter(test_loader))[0][:10].to(params['device'])
-
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
-        with record_function("model_inference"):
-            best_model_loaded(inference_images)
-
-    model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
-    cpu_inference_time = prof.key_averages()[0].cpu_time
-    cuda_inference_time = prof.key_averages()[0].cuda_time
+    model_metrics = metrics.ModelMetrics(best_model_loaded, device=params['device'])
     
-    total_trainable_params = sum(p.numel() for p in best_model_loaded.parameters() if p.requires_grad)
+    inference_images = next(iter(val_loader))[0][:10].to(params['device'])
+    input_shape = params['input_shape']
+    
+    cuda_inference_time = model_metrics.measure_inference_time(inference_images)
+    model_memory_usage = model_metrics.measure_memory(input_shape) / (1024 ** 2)  # Convert bytes to MB
+    total_trainable_params = model_metrics.measure_parameters()
+    total_flops = model_metrics.measure_flops(input_shape)
     
     
     training_results['total_trainable_params'] = total_trainable_params
     training_results['cuda_inference_time'] = cuda_inference_time
-    training_results['cpu_inference_time'] = cpu_inference_time
+    training_results['total_flops'] = total_flops
     training_results['model_memory_usage'] = model_memory_usage
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
@@ -272,7 +287,7 @@ def train(model: torch.nn.Module,
 
 
 def train_and_eval(params: Dict[str, Any],
-                   train_loader:torch.utils.data.DataLoader, 
+                    train_loader:torch.utils.data.DataLoader, 
                     val_loader:torch.utils.data.DataLoader,
                     test_loader:torch.utils.data.DataLoader) -> Dict[str, Union[List[float], float]]:
     """
@@ -359,6 +374,6 @@ def train_and_eval(params: Dict[str, Any],
             LOGGER.error(f"An error occurred during training: {e}")
             results_dict = None
     
-    realese_gpu_memory(gpu_name=params['device'])
+    release_gpu_memory(gpu_name=params['device'])
     
     return results_dict

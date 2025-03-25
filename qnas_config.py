@@ -49,9 +49,9 @@ class ConfigParameters(object):
             ranges = config_file['QNAS']['params_ranges']
 
             allowed = {'decay': (1e-6, 1.0),
-                       'learning_rate': (1e-6, 1.0),
-                       'momentum': (0.0, 1.0),
-                       'weight_decay': (1e-10, 1e-1)}
+                        'learning_rate': (1e-6, 1.0),
+                        'momentum': (0.0, 1.0),
+                        'weight_decay': (1e-10, 1e-1)}
 
             for key, value in ranges.items():
                 if type(value) is list:
@@ -75,7 +75,7 @@ class ConfigParameters(object):
                 for param in definition['params'].values():
                     if type(param) is not int or param < 0:
                         raise ValueError(f"{name} has an invalid parameter: "
-                                         f"{definition['params']}!")
+                                        f"{definition['params']}!")
 
                 if type(definition['prob']) == str:
                     probs.append(eval(definition['prob']))
@@ -86,42 +86,50 @@ class ConfigParameters(object):
                 probs = np.sum(probs)
                 if probs > 1.0 or 1.0 - probs > 1e-8:
                     raise ValueError("Function probabilities should sum 1.0! "
-                                     "Tolerance of numpy is 1e-8.")
+                                    "Tolerance of numpy is 1e-8.")
 
         vars_dict = {'QNAS': [('crossover_rate', float),
-                              ('max_generations', int),
-                              ('max_num_nodes', int),
-                              ('num_quantum_ind', int),
-                              ('penalize_number', int),
-                              ('repetition', int),
-                              ('replace_method', str),
-                              ('update_quantum_rate', float),
-                              ('update_quantum_gen', int),
-                              ('save_data_freq', int),
-                              ('params_ranges', dict),
-                              ('patience', int),
-                              ('function_dict', dict)],
-                     'train': [('batch_size', int),
-                               ('eval_batch_size', int),
-                               ('max_epochs', int),
-                               ('epochs_to_eval', int),
-                               ('optimizer', str),
-                               ('device', str),
-                               ('dataset', str),
-                               ('mixed_precision', bool),
-                               ('fitness_metric', str),
-                               ('data_augmentation', bool),
-                               ('subtract_mean', bool),
-                               ('save_checkpoints_epochs', int),
-                               ('save_summary_epochs', float),
-                               ('threads', int)]}
+                                ('max_generations', int),
+                                ('max_num_nodes', int),
+                                ('num_quantum_ind', int),
+                                ('penalize_number', int),
+                                ('repetition', int),
+                                ('replace_method', str),
+                                ('update_quantum_rate', float),
+                                ('update_quantum_gen', int),
+                                ('save_data_freq', int),
+                                ('params_ranges', dict),
+                                ('patience', int),
+                                ('crossover_frequency', int),
+                                ('pop_crossover_rate', float),
+                                ('pop_crossover_method', str),
+                                ('function_dict', dict)],
+                    'train': [('batch_size', int),
+                                ('eval_batch_size', int),
+                                ('max_epochs', int),
+                                ('epochs_to_eval', int),
+                                ('optimizer', str),
+                                ('device', str),
+                                ('dataset', str),
+                                ('mixed_precision', bool),
+                                ('fitness_metric', str),
+                                ('mo_metric_base', str),
+                                ('data_augmentation', bool),
+                                ('subtract_mean', bool),
+                                ('limit_data', bool),
+                                ('limit_data_value', int),
+                                ('network_gap', bool),
+                                ('network_config', str),
+                                ('save_checkpoints_epochs', int),
+                                ('save_summary_epochs', float),
+                                ('threads', int)]}
 
         for config in vars_dict.keys():
             for item in vars_dict[config]:
                 var = config_file[config].get(item[0])
                 if var is None:
                     raise KeyError(f"Variable \"{config}:{item[0]}\" not found in "
-                                   f"configuration file {self.args['config_file']}")
+                                f"configuration file {self.args['config_file']}")
                 elif type(var) is not item[1]:
                     raise TypeError(f"Variable {item[0]} should be of type {item[1]} but it "
                                     f"is a {type(var)}")
@@ -141,11 +149,13 @@ class ConfigParameters(object):
 
         self.train_spec = dict(config_file['train'])
         self.QNAS_spec = dict(config_file['QNAS'])
+        self.files_spec['config_file'] = self.args['config_file']
 
         # Get the parameters lower and upper limits
         ranges = self._get_ranges(config_file)
         self.QNAS_spec['params_ranges'] = OrderedDict(sorted(ranges.items()))
         self.QNAS_spec['early_stopping'] = self.args['early_stopping']
+        self.QNAS_spec['en_pop_crossover'] = self.args['en_pop_crossover']
 
         self._get_fn_spec()
 
@@ -153,9 +163,12 @@ class ConfigParameters(object):
         self.train_spec['fitness_metric'] = self.args['fitness_metric']
         self.train_spec['optimizer'] = self.args['optimizer']
         self.train_spec['data_augmentation'] = self.args['data_augmentation']
+        self.train_spec['network_config'] = self.args['network_config']
+        self.train_spec['network_gap'] = self.args['network_gap']
         self.train_spec['save_checkpoints_epochs'] = self.args['save_checkpoints_epochs']
         self.train_spec['dataset'] = self.args['dataset']
         self.train_spec['data_path'] = self.args['data_path']
+        self.train_spec['limit_data_value'] = self.args['limit_data_value']
         
         
 
@@ -202,10 +215,10 @@ class ConfigParameters(object):
 
         if self.train_spec['optimizer'] == 'Momentum':
             ranges = {key: val for key, val in config_file['QNAS']['params_ranges'].items()
-                      if key != 'decay' and type(val) == list}
+                    if key != 'decay' and type(val) == list}
         else:
             ranges = {key: val for key, val in config_file['QNAS']['params_ranges'].items()
-                      if type(val) == list}
+                    if type(val) == list}
 
         # If user provided a value instead of a range, parameter will not be evolved.
         for key, value in config_file['QNAS']['params_ranges'].items():
@@ -225,7 +238,7 @@ class ConfigParameters(object):
             self.files_spec['continue_path'], 'log_params_evolution.txt')
 
         self.files_spec['previous_data_file'] = os.path.join(self.args['continue_path'],
-                                                             'data_QNAS.pkl')
+                                                            'data_QNAS.pkl')
         self.load_old_params()
         self.QNAS_spec['max_generations'] = load_yaml(
                 self.args['config_file'])['QNAS']['max_generations']
@@ -238,14 +251,14 @@ class ConfigParameters(object):
         """
 
         self.files_spec['previous_QNAS_params'] = os.path.join(self.args['experiment_path'],
-                                                               'log_params_evolution.txt')
+                                                            'log_params_evolution.txt')
         self.load_old_params()
 
         for key in self.args.keys():
             self.train_spec[key] = self.args[key]
 
         self.train_spec['experiment_path'] = os.path.join(self.train_spec['experiment_path'],
-                                                          self.args['retrain_folder'])
+                                                        self.args['retrain_folder'])
         del self.args['retrain_folder']
 
     def _get_common_params(self):
@@ -412,16 +425,16 @@ class ConfigParameters(object):
         if self.train_spec['phase'] == 'retrain':
             phase = 'retrain'
             params_dict = {'evolved_params': self.evolved_params,
-                           'train': self.train_spec,
-                           'files': self.files_spec}
-                           #'train_data_info': data_dict}
+                            'train': self.train_spec,
+                            'files': self.files_spec}
+                            #'train_data_info': data_dict}
         else:
             phase = 'evolution'
             params_dict = {'QNAS': self.QNAS_spec,
-                           'train': self.train_spec,
-                           'files': self.files_spec,
-                           'fn_dict': self.fn_dict}
-                           #'train_data_info': data_dict}
+                            'train': self.train_spec,
+                            'files': self.files_spec,
+                            'fn_dict': self.fn_dict}
+                            #'train_data_info': data_dict}
 
         params_file_path = os.path.join(self.train_spec['experiment_path'],
                                         f'log_params_{phase}.txt')

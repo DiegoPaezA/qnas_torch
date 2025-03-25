@@ -38,7 +38,8 @@ train:
     max_epochs: 50
     epochs_to_eval: 5 
     optimizer: AdamW
-    fitness_metric: best_accuracy
+    fitness_metric: best_loss
+    mo_metric_base: loss
     mixed_precision: True
     available_gpus: [0, 1] # gpu0, gpu1, gpu2 [0, 1, 2]
     device: cuda:0
@@ -59,3 +60,7 @@ train:
     # penalization parameters - scalarized fitness
     max_params: 2700000 # 2.7M
     max_inference_time: 3600 # us
+
+    # Network structure Configuration
+    network_config: default
+    network_gap = False

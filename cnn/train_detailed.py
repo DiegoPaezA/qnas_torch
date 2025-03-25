@@ -14,9 +14,8 @@ import torch.nn as nn
 from tqdm.notebook import tqdm
 from typing import Dict, List, Union, Any
 from sklearn.metrics import confusion_matrix
-from cnn import model, input
+from cnn import model, input, metrics
 from util import create_info_file, init_log, load_yaml
-from torch.profiler import profile, record_function, ProfilerActivity
 from torch.optim.lr_scheduler import ReduceLROnPlateau, ExponentialLR, CosineAnnealingLR, MultiStepLR
 
 current_directory = os.path.dirname(os.path.dirname(__file__))
@@ -27,17 +26,39 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'retrain.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
-def realese_gpu_memory(gpu_name='cuda:0'):
+def release_gpu_memory(gpu_name='cuda:0'):
     """
     Release GPU memory.
+    
+    Args:
+        gpu_name (str): The name of the GPU device (default is 'cuda').
     """
-    # Set the device to GPU named "cuda:1"
-    torch.cuda.set_device(gpu_name)
+    if not torch.cuda.is_available():
+        print("CUDA is not available. No GPU memory to release.")
+        return
+    
+    if gpu_name == 'cuda':
+        gpu_name = 'cuda:0'
+
+    device = torch.device(gpu_name)
+    torch.cuda.set_device(device)
+
+    # Get memory usage before clearing the cache
+    memory_allocated_before = torch.cuda.memory_allocated(device)
+    memory_reserved_before = torch.cuda.memory_reserved(device)
+
+    # Clear the cache
     torch.cuda.empty_cache()
 
-    # Print memory statistics
-    #print(f"Allocated GPU memory: {torch.cuda.memory_allocated() / (1024 ** 3):.2f} GB")
-    #print(f"Reserved GPU memory: {torch.cuda.memory_reserved() / (1024 ** 3):.2f} GB")
+    # Check if there was a significant change
+    memory_allocated_after = torch.cuda.memory_allocated(device)
+    memory_reserved_after = torch.cuda.memory_reserved(device)
+
+    # Verificar si hubo un cambio significativo
+    if memory_allocated_before != memory_allocated_after or memory_reserved_before != memory_reserved_after:
+        print("Cache was cleared.")
+    else:
+        print("Cache was already empty.")
 
 def compute_metrics(model, data_loader, params):
     model.eval()
@@ -70,12 +91,15 @@ def compute_metrics(model, data_loader, params):
 def reset_and_load_best_model(params, best_model_path):
     # Reinitialize the original model
     
-    best_model = model.NetworkGraph(num_classes=params["num_classes"], mu=0.99)
+    best_model = model.NetworkGraph(num_classes=params["num_classes"],
+                                    network_config=params['network_config'], 
+                                    network_gap=params['network_gap'])
     filtered_dict = {key: item for key, item in params['fn_dict'].items() if key in params['net_list']}
     best_model.create_functions(fn_dict=filtered_dict, net_list=params['net_list'])
 
     input_random = torch.randn(params['input_shape'])
-    _ = best_model(input_random)
+    with torch.no_grad():
+        _ = best_model(input_random)
     # Load the state dictionary of the best model into the new model
     best_model.load_state_dict(torch.load(best_model_path))
     best_model.to(params['device'])
@@ -97,11 +121,7 @@ def train_epoch(model, criterion, optimizer, data_loader, params):
             labels = labels.squeeze().long() # medmnist
             
         loss = criterion(y_logits, labels)
-        loss.backward()
-        
-        # Apply gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
+        loss.backward()       
         optimizer.step()
         train_loss += loss.item()
         _, predicted = y_logits.max(1)
@@ -142,12 +162,12 @@ def evaluate(model, criterion, data_loader, params, test=False):
     return eval_loss, accuracy
 
 def train(model: torch.nn.Module,
-          criterion: torch.nn.Module,
-          optimizer: torch.optim.Optimizer,
-          train_loader: torch.utils.data.DataLoader,
-          val_loader: torch.utils.data.DataLoader,
-          test_loader: torch.utils.data.DataLoader,
-          params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
+        criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        test_loader: torch.utils.data.DataLoader,
+        params: Dict[str, Union[int, float, str]]) -> Dict[str, Union[List[float], float]]:
     """
     Retrain a convolutional neural network model.
 
@@ -214,18 +234,18 @@ def train(model: torch.nn.Module,
         validation_losses.append(validation_loss)
         validation_accuracies.append(accuracy)
         
-        if accuracy > best_accuracy and  epoch % params['save_checkpoints_epochs'] == 0: 
+        if accuracy > best_accuracy: 
             best_accuracy = accuracy
             torch.save(model.state_dict(), best_model_path)
             create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
 
-        if epoch % 50 == 0:
+        if epoch % 25 == 0:
             LOGGER.info(f"Experiment: {params['experiment_path']} - Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss:.2f} - Validation loss: {validation_loss:.2f} - Validation accuracy: {accuracy:.2f}%")
             #print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
         if lr_scheduler is not None:
             if params['lr_scheduler'] == 'reduce_on_plateau':
-                lr_scheduler.step(accuracy)                
+                lr_scheduler.step(validation_loss)                
             else:
                 lr_scheduler.step()
         
@@ -239,24 +259,19 @@ def train(model: torch.nn.Module,
     
     create_info_file(params['model_path'], params, 'retraining_params.txt')
     
-        # Measure inference time
-    inference_images = next(iter(test_loader))[0][:10].to(params['device'])
-
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],profile_memory=True, record_shapes=True) as prof:
-        with record_function("model_inference"):
-            best_model_loaded(inference_images)
-
-    model_memory_usage = sum(event.cuda_memory_usage for event in prof.key_averages()) / (1024 ** 2)
-    cpu_inference_time = prof.key_averages()[0].cpu_time
-    cuda_inference_time = prof.key_averages()[0].cuda_time
+    model_metrics = metrics.ModelMetrics(best_model_loaded, device=params['device'])
     
-    total_trainable_params = sum(p.numel() for p in best_model_loaded.parameters() if p.requires_grad)
+    inference_images = next(iter(val_loader))[0][:10].to(params['device'])
+    input_shape = params['input_shape']
     
-    
-    
+    cuda_inference_time = model_metrics.measure_inference_time(inference_images)
+    model_memory_usage = model_metrics.measure_memory(input_shape) / (1024 ** 2)  # Convert bytes to MB
+    total_trainable_params = model_metrics.measure_parameters()
+    total_flops = model_metrics.measure_flops(input_shape)
+        
     training_results['total_trainable_params'] = total_trainable_params
     training_results['cuda_inference_time'] = cuda_inference_time
-    training_results['cpu_inference_time'] = cpu_inference_time
+    training_results['total_flops'] = total_flops
     training_results['model_memory_usage'] = model_memory_usage
     training_results['training_losses'] = training_losses
     training_results['training_accuracies'] = training_accuracies
@@ -311,13 +326,15 @@ def train_and_eval(params: Dict[str, Any],
     
     LOGGER.info(f"Start retraining of the experiment: {params['experiment_path']}")
     # Load data information
-    if hasattr(input.available_datasets, params['dataset'].lower()):
+    if params['dataset'].lower() in input.available_datasets:
         dataset_info = input.available_datasets[params['dataset'].lower()]
     else:
         dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
     
-
-    model_net = model.NetworkGraph(num_classes=dataset_info["num_classes"], mu=0.99)
+    # Create the model
+    model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'], 
+                                   network_config=params['network_config'], 
+                                   network_gap=params['network_gap'])
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
@@ -354,14 +371,18 @@ def train_and_eval(params: Dict[str, Any],
     
     try:
         results_dict = train(model_net, criterion, optimizer, train_loader, val_loader, test_loader, params)
-    except Exception as e:
+    except RuntimeError as e:
         if "out of memory" in str(e):
             LOGGER.error(f"Out of memory error: {e}")
             results_dict = None
+            release_gpu_memory(gpu_name=params['device'])
         else:
-            LOGGER.error(f"An error occurred during training: {e}")
-            results_dict = None
+            LOGGER.error(f"Runtime error during training: {e}")
+            raise
+    except Exception as e:
+        LOGGER.error(f"An unexpected error occurred during training: {e}")
+        raise
     
-    realese_gpu_memory(gpu_name=params['device'])
+    release_gpu_memory(gpu_name=params['device'])
     
     return results_dict
