@@ -1020,7 +1020,7 @@ functions_dict = {
     'no_op': NoOp}
 
 class NetworkGraph(nn.Module):
-    def __init__(self, num_classes, in_channels=3, network_gap=False, network_config = 'default'):
+    def __init__(self, num_classes, in_channels=1, network_gap=False, network_config = 'default'):
         """ Initialize NetworkGraph.
 
         Args:

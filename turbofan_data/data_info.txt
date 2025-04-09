@@ -1,0 +1,15 @@
+dataset: turbofan
+mean:
+- 1821.76611328125
+num_classes: 1
+seed: 1744226665
+shape:
+- 1
+- 15
+- 15
+std:
+- 2777.650634765625
+task: regression
+test_records: 100
+train_records: 17307
+valid_records: 1924

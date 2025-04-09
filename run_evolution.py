@@ -1,10 +1,14 @@
 import argparse
 import os
-
+import sys
 import qnas
 import qnas_config as cfg
 import evaluation
 from util import check_files, init_log, download_dataset
+
+
+DEBUG = True
+
 
 def main(**args):
     
@@ -58,7 +62,7 @@ if __name__ == '__main__':
                         help='Directory where to write logs and model files.')
     parser.add_argument('--data_path', type=str, required=True, help='Path to input data.')
     parser.add_argument('--dataset', type=str, required=True,  help='Dataset name.', 
-                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist', 'organcmnist', 'atleta_axial', 'atleta_coronal'])
+                        choices=['cifar10', 'cifar100', 'pathmnist', 'octmnist', 'tissuemnist', 'organamnist', 'organcmnist', 'atleta_axial', 'atleta_coronal', 'turbofan'])
     parser.add_argument('--config_file', type=str, required=True,
                         help='Configuration file name.')
     parser.add_argument('--continue_path', type=str, default='',
@@ -70,7 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['RMSProp', 'Adam', 'AdamW', 'SGD'],
                         help='Optimizer to be used during training. Default = AdamW.')
     parser.add_argument('--fitness_metric', type=str, default='best_accuracy', 
-                        choices=['best_accuracy', 'best_loss', 'scalar_multi_objective'],
+                        choices=['best_accuracy', 'best_loss', 'scalar_multi_objective', 'best_rmse'],
                         help='Fitness metric to be used during evolution. Default = accuracy.')
     parser.add_argument('--data_augmentation', action='store_true',
                     help='Enable data augmentation during training. Default = False.')
@@ -86,6 +90,31 @@ if __name__ == '__main__':
                     help='Enable network gap during evolution. Default = False.')
     parser.add_argument('--network_config', type=str, required=True,  help='Network structure configuration.', default='default',
                         choices=['default', 'dense'])
+
+    if DEBUG:
+        dataset = "organamnist"
+        exp_path_base = f"exp_{dataset}"
+        exp = "exp1"
+        data_path = f"{dataset}_data"
+        fitness_metric = "best_loss"
+        config = "config1.txt"
+        config_file = f"config_files_medmnist"
+        config_file = f"{config_file}/{config}"
+        log_level = "INFO"
+        i = 1
+        exp_path = f"{exp_path_base}/{exp}_repeat_{i}"
+        network_config = "default"
+
+        sys.argv = [
+            "run_evolution.py",
+            "--experiment_path", exp_path,
+            "--data_path", data_path,
+            "--dataset", dataset,
+            "--config_file", config_file,
+            "--fitness_metric", fitness_metric,
+            "--log_level", log_level,
+            "--network_config", network_config
+        ]
 
     arguments = parser.parse_args()
 

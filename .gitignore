@@ -119,6 +119,7 @@ pathmnist_data/
 tissuemnist_data/
 atleta_axial_data/
 atleta_coronal_data/
+my_exp_config3/
 
 # Results
 exp*/

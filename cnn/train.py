@@ -269,7 +269,8 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     # Create the model    
     model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'], 
                                    network_config=params['network_config'], 
-                                   network_gap=params['network_gap'])
+                                   network_gap=params['network_gap'],
+                                   in_channels= 1 if params['dataset'] == "turbofan" else 3)
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list, cbam=has_cbam_key)
     
@@ -282,7 +283,7 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
     
     params['input_shape'] = input_shape
     
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.L1Loss() if params['dataset'] == "turbofan" else nn.CrossEntropyLoss()
     
     if params['optimizer'] == 'RMSProp':
         optimizer = torch.optim.RMSprop(model_net.parameters())

@@ -540,6 +540,7 @@ def download_dataset(params: dict):
             dataset_class = getattr(medmnist, general_info['python_class'])
             dataset_class(root=data_path, split='train', download=True, transform=ToTensor(), as_rgb=True)
         else:
+            #TODO: Criar classe para fazer pré-processamento e uma classe para salvar os dados processados
             raise ValueError(f"Dataset class {dataset_name} not found in torchvision.datasets or available_datasets.")
         return False
     else:

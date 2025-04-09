@@ -9,6 +9,7 @@ import random
 import util
 import os
 import numpy as np
+import pandas as pd
 from time import time
 import torchvision.datasets
 from torch.utils.data import DataLoader, Subset, Dataset
@@ -64,6 +65,22 @@ available_datasets = {
   'atleta_coronal': atletascoronal_info
 }
 
+
+class CustomDataset(Dataset):
+    def __init__(self, X, y):
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.y = torch.tensor(y, dtype=torch.float32)
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
+
+class IdentityTransform:
+    def __call__(self, x):
+        return x
+
 class MyDataset(Dataset):
     def __init__(self, subset, transform=None):
         self.subset = subset
@@ -93,6 +110,7 @@ class GenericDataLoader:
     Returns:
       None
     """
+    dataset_family = None
     self.params = params
     self.train_split = train_split
     error_msg = "[!] train_split should be in the range [0, 1]."
@@ -107,6 +125,9 @@ class GenericDataLoader:
     
     if self.download_status:
       os.makedirs(self.params['data_path'])
+
+    if self.params["dataset"] == "turbofan":
+      info = params.copy()
 
     if not info:
         # Check if the dataset is available in the available_datasets dict
@@ -164,7 +185,23 @@ class GenericDataLoader:
           raise ValueError(f"Dataset class {self.params['dataset']} not found in torchvision.datasets or available_datasets.")
         
     else:
-      raise NotImplementedError('Custom dataset is not implemented yet.')             
+      if self.params["dataset"] == "turbofan":
+        data = np.load(os.path.join(self.params['data_path'], f"{self.params['dataset']}.npz"))
+        X_train = data["X_train"]
+        y_train = data["y_train"]
+  
+        train_dataset = CustomDataset(X_train, y_train)
+
+        train_loader = DataLoader(train_dataset, batch_size=self.params["batch_size"], shuffle=False)
+
+        data = next(iter(train_loader))
+        mean = data[0].mean(dim=(0, 2, 3)).tolist()
+        std = data[0].std(dim=(0, 2, 3)).tolist()
+        channels, height, width = data[0].shape[1:]
+        self.num_classes = self.params["num_classes"]
+        self.task = self.params["task"]
+      else:
+        raise NotImplementedError('Custom dataset is not implemented yet.')
     
     self.info_dict['shape'] = [channels, height, width]  
     self.info_dict['mean'] = mean
@@ -178,6 +215,11 @@ class GenericDataLoader:
     
     # Define common transformations
     basic_transform = [ToTensor(), Normalize(mean=mean, std=std)]
+
+    # # TODO: Remove normalization for turbofan
+    # if self.params["dataset"] == "turbofan":
+    #   basic_transform = [IdentityTransform()]
+
     resize_transform = [Resize((height, width))] + basic_transform
 
     # Set the self.transform
@@ -231,7 +273,20 @@ class GenericDataLoader:
       except:
         raise ValueError(f"Dataset is not available in the path {self.params['data_path']}")
     else:
-      raise NotImplementedError('Custom dataset is not implemented yet.')
+      if self.params["dataset"] == "turbofan":
+        data = np.load(os.path.join(self.params['data_path'], f"{self.params['dataset']}.npz"))
+        X_train = data["X_train"]
+        y_train = data["y_train"]
+        X_test = data["X_test"]
+        y_test = data["y_test"]
+        X_val = data["X_val"]
+        y_val = data["y_val"]
+  
+        train_dataset = CustomDataset(X_train, y_train)
+        test_dataset = CustomDataset(X_test, y_test)
+        valid_dataset = CustomDataset(X_val, y_val)
+      else:
+        raise NotImplementedError('Custom dataset is not implemented yet.')
     
     drop_last = True if self.params['dataset'].lower() == 'organamnist' else False
         
@@ -316,13 +371,16 @@ class GenericDataLoader:
     elif 'atleta' in self.params['dataset'].lower():
       pass
     else:
-      raise NotImplementedError('Custom dataset is not implemented yet.')
+      if self.params["dataset"] == "turbofan":
+        pass
+      else: 
+        raise NotImplementedError('Custom dataset is not implemented yet.')
 
     train_loader = DataLoader(
       train_dataset,
       batch_size=self.params['batch_size'],
       num_workers=self.params['num_workers'],
-      shuffle=True,
+      shuffle= False if self.params["dataset"] == "turbofan" else True,
       drop_last=drop_last,
       pin_memory=True, 
       pin_memory_device=pin_memory_device)
