@@ -38,7 +38,7 @@ QNAS:
 
 train:
     batch_size: 32
-    eval_batch_size: 1000
+    eval_batch_size: 16
     max_epochs: 6
     epochs_to_eval: 5 
     optimizer: AdamW
@@ -54,7 +54,7 @@ train:
     subtract_mean: True
     limit_data: True
     limit_data_value: 10000
-    num_workers: 1
+    num_workers: 4
     num_classes: 1
     task: regression
 

@@ -2,7 +2,7 @@ dataset: turbofan
 mean:
 - 1821.76611328125
 num_classes: 1
-seed: 1744226665
+seed: 1744336591
 shape:
 - 1
 - 15

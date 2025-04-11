@@ -116,6 +116,15 @@ class EvalPopulation(object):
         self.logger.info(f"Starting the Generation {generation} with {pop_size} individuals")
         evol_time_start = time.perf_counter()
 
+        # gpu_device = self.gpus[0]
+        # train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
+        # self.run_individuals(generation,
+        #                      self.train_params,
+        #                      self.fn_dict,
+        #                      train_loader,
+        #                      val_loader,
+        #                      individual_per_thread,
+        #                      gpu_device)
         for idx in range(self.train_params['threads']):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
             gpu_device = self.gpus[idx%len(self.gpus)]

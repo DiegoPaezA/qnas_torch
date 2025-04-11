@@ -106,7 +106,7 @@ if __name__ == '__main__':
         network_config = "default"
 
         sys.argv = [
-            "run_evolution.py",
+            "run_evolution_turbofan.py",
             "--experiment_path", exp_path,
             "--data_path", data_path,
             "--dataset", dataset,
