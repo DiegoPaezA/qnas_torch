@@ -68,8 +68,8 @@ available_datasets = {
 
 class CustomDataset(Dataset):
     def __init__(self, X, y):
-        self.X = torch.tensor(X, dtype=torch.float32)
-        self.y = torch.tensor(y, dtype=torch.float32)
+        self.X = X
+        self.y = y
 
     def __len__(self):
         return len(self.X)
@@ -282,9 +282,13 @@ class GenericDataLoader:
         X_val = data["X_val"]
         y_val = data["y_val"]
   
-        train_dataset = CustomDataset(X_train, y_train)
-        test_dataset = CustomDataset(X_test, y_test)
-        valid_dataset = CustomDataset(X_val, y_val)
+
+        train_dataset = CustomDataset(torch.tensor(X_train, dtype=torch.float32),
+                                      torch.tensor(y_train, dtype=torch.float32))
+        test_dataset = CustomDataset(torch.tensor(X_test, dtype=torch.float32),
+                                      torch.tensor(y_test, dtype=torch.float32))
+        valid_dataset = CustomDataset(torch.tensor(X_val, dtype=torch.float32),
+                                      torch.tensor(y_val, dtype=torch.float32))
       else:
         raise NotImplementedError('Custom dataset is not implemented yet.')
     

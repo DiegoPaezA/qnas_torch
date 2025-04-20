@@ -26,6 +26,80 @@ if not os.path.exists(log_directory):
 log_file = os.path.join(log_directory, 'retrain.log')
 LOGGER = init_log("INFO", name=__name__, file_path=log_file)
 
+
+class MetricTracker:
+    """
+    A class for tracking evaluation metrics during training and validation,
+    supporting both classification and regression tasks.
+
+    Parameters
+    ----------
+    task : str
+        The type of task. Must be either 'multi-class' for classification or 'regression' for regression problems.
+
+    Attributes
+    ----------
+    task : str
+        The task type.
+    total : float
+        Accumulated number of samples or accumulated loss value.
+    correct : int
+        Accumulated number of correct predictions (only for classification).
+    count : int
+        Number of batches (used for averaging loss in regression).
+    """
+
+    def __init__(self, task: str):
+        self.task = task
+        self.total = 0
+        self.correct = 0
+        self.count = 0
+
+    def update(self, y_logits: torch.Tensor, labels: torch.Tensor):
+        """
+        Update the internal state based on model predictions and ground truth labels.
+
+        For classification tasks ('multi-class'), accumulates the number of correct predictions and total samples.
+        For regression tasks ('regression'), accumulates the root mean squared error (RMSE) over batches.
+
+        Parameters
+        ----------
+        y_logits : torch.Tensor
+            Model predictions. Shape: (batch_size, num_classes) for classification,
+            (batch_size, 1) or (batch_size,) for regression.
+
+        labels : torch.Tensor
+            Ground truth labels. Shape should match y_logits accordingly.
+        """
+        if self.task == 'multi-class' or self.task == 'classification':
+            _, predicted = y_logits.max(1)
+            self.total += labels.size(0)
+            self.correct += predicted.eq(labels).sum().item()
+        elif self.task == 'regression':
+            rmse = torch.sqrt(torch.nn.functional.mse_loss(y_logits, labels, reduction='mean')).item()
+            self.total += rmse
+            self.count += 1
+        else:
+            raise ValueError(f"Unknown task type: {self.task}")
+
+    def result(self) -> float:
+        """
+        Compute the final metric based on accumulated values.
+
+        Returns
+        -------
+        float
+            The average metric:
+            - Accuracy (%) for classification.
+            - Root Mean Squared Error (RMSE) for regression.
+        """
+        if self.task == 'multi-class' or self.task == 'classification':
+            return 100.0 * self.correct / self.total if self.total > 0 else 0.0
+        elif self.task == 'regression':
+            root_mean_squared_error = self.total / self.count if self.count > 0 else 0.0
+            return torch.tensor(root_mean_squared_error).item()
+
+
 def release_gpu_memory(gpu_name='cuda:0'):
     """
     Release GPU memory.
@@ -93,7 +167,8 @@ def reset_and_load_best_model(params, best_model_path):
     
     best_model = model.NetworkGraph(num_classes=params["num_classes"],
                                     network_config=params['network_config'], 
-                                    network_gap=params['network_gap'])
+                                    network_gap=params['network_gap'],
+                                    in_channels=params["input_shape"][1])
     filtered_dict = {key: item for key, item in params['fn_dict'].items() if key in params['net_list']}
     best_model.create_functions(fn_dict=filtered_dict, net_list=params['net_list'])
 
@@ -109,8 +184,8 @@ def reset_and_load_best_model(params, best_model_path):
 def train_epoch(model, criterion, optimizer, data_loader, params):
     model.train()
     train_loss = 0.0
-    correct = 0
-    total = 0
+
+    metric_tracker = MetricTracker(params['task'])
 
     for inputs, labels in data_loader:
         inputs, labels = inputs.to(params['device']), labels.to(params['device'])
@@ -124,19 +199,17 @@ def train_epoch(model, criterion, optimizer, data_loader, params):
         loss.backward()       
         optimizer.step()
         train_loss += loss.item()
-        _, predicted = y_logits.max(1)
-        total += labels.size(0)
-        correct += predicted.eq(labels).sum().item()
+        metric_tracker.update(y_logits, labels)
         
-    accuracy = 100 * correct / total
+    avg_metric = metric_tracker.result()
     train_loss /= len(data_loader)
-    return train_loss, accuracy
+    return train_loss, avg_metric
 
 def evaluate(model, criterion, data_loader, params, test=False):
     model.eval()
     eval_loss = 0.0
-    correct = 0
-    total = 0
+
+    metric_tracker = MetricTracker(params['task'])
 
     with torch.no_grad():
         for inputs, labels in data_loader:
@@ -148,18 +221,19 @@ def evaluate(model, criterion, data_loader, params, test=False):
                 
             loss = criterion(y_logits, labels)
             eval_loss += loss.item()
-            _, predicted = y_logits.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
+            metric_tracker.update(y_logits, labels)
 
-    accuracy = 100 * correct / total
+    avg_metric = metric_tracker.result()
     eval_loss /= len(data_loader)
     
     if test:
-        confusion_matrix, auc, acc = compute_metrics(model, data_loader, params)
-        return eval_loss, accuracy, auc, acc , confusion_matrix
+        if params['task'] == 'regression':
+            return eval_loss, avg_metric
+        else:
+            confusion_matrix, auc, acc = compute_metrics(model, data_loader, params)
+            return eval_loss, avg_metric, auc, acc , confusion_matrix
 
-    return eval_loss, accuracy
+    return eval_loss, avg_metric
 
 def train(model: torch.nn.Module,
         criterion: torch.nn.Module,
@@ -202,10 +276,9 @@ def train(model: torch.nn.Module,
     """
     model.train()
     training_losses = []
-    training_accuracies = []
+    training_metrics = []
     validation_losses = []
-    validation_accuracies = []
-    best_accuracy = 0.0
+    validation_metrics = []
     auc_value = 0.0
     acc_med = 0.0
     training_results = {}
@@ -224,23 +297,41 @@ def train(model: torch.nn.Module,
         lr_scheduler = MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
     else:
         lr_scheduler = None
+
+    # Check which metric to calculate
+    if params['task'] == 'multi-class' or params['task'] == 'classification':
+        metric_name = "accuracy"
+        best_val_metric = float('-inf')
+    elif params['task'] == 'regression':
+        best_val_metric = float('inf')
+        metric_name = "rmse"
+    else:
+        best_val_metric = None
+        raise ValueError(f"Unknown task type: {params['task']}")
+
     #for epoch in tqdm(range(1, max_epochs + 1), desc="Retrain Scheme"):
     for epoch in range(1, max_epochs + 1):
-        train_loss, train_accuracy = train_epoch(model, criterion, optimizer, train_loader, params)
+        train_loss, train_metric = train_epoch(model, criterion, optimizer, train_loader, params)
         training_losses.append(train_loss)
-        training_accuracies.append(train_accuracy)
+        training_metrics.append(train_metric)
         
-        validation_loss, accuracy = evaluate(model, criterion, val_loader, params)
+        validation_loss, val_metric = evaluate(model, criterion, val_loader, params)
         validation_losses.append(validation_loss)
-        validation_accuracies.append(accuracy)
+        validation_metrics.append(val_metric)
         
-        if accuracy > best_accuracy: 
-            best_accuracy = accuracy
-            torch.save(model.state_dict(), best_model_path)
-            create_info_file(params['model_path'], {'best_accuracy': best_accuracy}, 'best_accuracy.txt')
+        if params['task'] == 'regression':
+            if val_metric < best_val_metric: 
+                best_val_metric = val_metric
+                torch.save(model.state_dict(), best_model_path)
+                create_info_file(params['model_path'], {f'best_{metric_name}': best_val_metric}, f'best_{metric_name}.txt')
+        else:
+            if val_metric > best_val_metric: 
+                best_val_metric = val_metric
+                torch.save(model.state_dict(), best_model_path)
+                create_info_file(params['model_path'], {f'best_{metric_name}': best_val_metric}, f'best_{metric_name}.txt')
 
         if epoch % 25 == 0:
-            LOGGER.info(f"Experiment: {params['experiment_path']} - Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss:.2f} - Validation loss: {validation_loss:.2f} - Validation accuracy: {accuracy:.2f}%")
+            LOGGER.info(f"Experiment: {params['experiment_path']} - Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss:.2f} - Validation loss: {validation_loss:.2f} - Validation {metric_name}: {val_metric:.2f}%")
             #print(f"Epoch [{epoch}/{max_epochs}] - Training loss: {train_loss} - Validation loss: {validation_loss} - Validation accuracy: {accuracy}%")
 
         if lr_scheduler is not None:
@@ -250,9 +341,14 @@ def train(model: torch.nn.Module,
                 lr_scheduler.step()
         
     best_model_loaded = reset_and_load_best_model(params, best_model_path)
-    test_loss, test_accuracy, auc_value, acc_med, confusion_matrix = evaluate(best_model_loaded, criterion, test_loader, params, test=True)
+
+    if params['task'] == 'regression':
+        test_loss, test_metric = evaluate(best_model_loaded, criterion, test_loader, params, test=True)
+        auc_value, acc_med, confusion_matrix = None, None, None
+    else:
+        test_loss, test_metric, auc_value, acc_med, confusion_matrix = evaluate(best_model_loaded, criterion, test_loader, params, test=True)
     
-    LOGGER.info(f"Experiment: {params['experiment_path']} - Test loss: {test_loss:.2f} - Test accuracy: {test_accuracy:.2f}%")
+    LOGGER.info(f"Experiment: {params['experiment_path']} - Test loss: {test_loss:.2f} - Test {metric_name}: {test_metric:.2f}%")
     #print(f"Test loss: {test_loss} - Test accuracy: {test_accuracy}%")
             
     params['t1'] = time.time()
@@ -274,15 +370,15 @@ def train(model: torch.nn.Module,
     training_results['total_flops'] = total_flops
     training_results['model_memory_usage'] = model_memory_usage
     training_results['training_losses'] = training_losses
-    training_results['training_accuracies'] = training_accuracies
+    training_results[f'training_{metric_name}'] = training_metrics
     training_results['validation_losses'] = validation_losses
-    training_results['validation_accuracies'] = validation_accuracies
-    training_results['best_accuracy'] = best_accuracy
+    training_results[f'validation_{metric_name}'] = validation_metrics
+    training_results[f'best_{metric_name}'] = best_val_metric
     training_results['test_loss'] = test_loss
-    training_results['test_accuracy'] = test_accuracy
+    training_results[f'test_{metric_name}'] = test_metric
     training_results['auc_score'] = auc_value
     training_results['acc_medmnist'] = acc_med
-    training_results['confusion_matrix'] = confusion_matrix.tolist()
+    training_results['confusion_matrix'] = confusion_matrix.tolist() if (confusion_matrix is not None) else confusion_matrix
             
     return training_results
 
@@ -334,7 +430,8 @@ def train_and_eval(params: Dict[str, Any],
     # Create the model
     model_net = model.NetworkGraph(num_classes=dataset_info['num_classes'], 
                                    network_config=params['network_config'], 
-                                   network_gap=params['network_gap'])
+                                   network_gap=params['network_gap'],
+                                   in_channels=dataset_info["shape"][0])
     filtered_dict = {key: item for key, item in fn_dict.items() if key in net_list}
     model_net.create_functions(fn_dict=filtered_dict, net_list=net_list)
 
@@ -352,7 +449,7 @@ def train_and_eval(params: Dict[str, Any],
     
     params['input_shape'] = input_shape
     
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.L1Loss() if params['task'] == "regression" else nn.CrossEntropyLoss()
     
     if params['optimizer'] == 'RMSProp':
         optimizer = torch.optim.RMSprop(model_net.parameters())

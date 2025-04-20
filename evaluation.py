@@ -68,7 +68,7 @@ class EvalPopulation(object):
         self.logger = init_log(log_level, name=__name__)
         self.gpus = [f'cuda:{i}' for i in range(torch.cuda.device_count())]
         self.loader = input.GenericDataLoader(params=self.train_params)
-        #mp.set_start_method('spawn') # This is necessary for the multiprocessing to work on Windows
+        # mp.set_start_method('spawn') # This is necessary for the multiprocessing to work on Windows
         self.logger.info(f"Evaluation process initialized with {len(self.gpus)} GPUs")        
         
     def __call__(self, decoded_params: list, decoded_nets: list, generation: int):
@@ -125,10 +125,13 @@ class EvalPopulation(object):
         #                      val_loader,
         #                      individual_per_thread,
         #                      gpu_device)
+
         for idx in range(self.train_params['threads']):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
             gpu_device = self.gpus[idx%len(self.gpus)]
-            train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
+            # train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
+            train_loader = None
+            val_loader = None
             process = mp.Process(target=self.run_individuals, args=(generation,
                                                 self.train_params,
                                                 self.fn_dict,
@@ -154,6 +157,7 @@ class EvalPopulation(object):
             
             
     def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread, gpu_device):
+        train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
         for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
             self.train_params['device'] = gpu_device
             train.fitness_calculation(f"{generation}_{individual}",
