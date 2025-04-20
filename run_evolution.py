@@ -7,7 +7,7 @@ import evaluation
 from util import check_files, init_log, download_dataset
 
 
-DEBUG = True
+DEBUG = False
 
 
 def main(**args):

@@ -54,7 +54,7 @@ train:
     subtract_mean: True
     limit_data: True
     limit_data_value: 10000
-    num_workers: 4
+    num_workers: 5
 
     # Tensorflow
     save_checkpoints_epochs: 10
