@@ -2,7 +2,7 @@
 
 QNAS:
     crossover_rate: 0.5
-    max_generations: 3
+    max_generations: 15
     max_num_nodes: 20
     num_quantum_ind: 4
     penalize_number: 3
@@ -39,7 +39,7 @@ QNAS:
 train:
     batch_size: 32
     eval_batch_size: 16
-    max_epochs: 6
+    max_epochs: 25
     epochs_to_eval: 5 
     optimizer: AdamW
     fitness_metric: best_loss
@@ -61,7 +61,7 @@ train:
     # Tensorflow
     save_checkpoints_epochs: 10
     save_summary_epochs: 0.25
-    threads: 10
+    threads: 6
 
     # penalization parameters - scalarized fitness
     max_params: 114090 # 1.9M

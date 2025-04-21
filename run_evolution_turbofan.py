@@ -94,7 +94,7 @@ if __name__ == '__main__':
     if DEBUG:
         dataset = "turbofan"
         exp_path_base = f"exp_{dataset}"
-        exp = "exp1"
+        exp = "expnorm"
         data_path = f"{dataset}_data"
         fitness_metric = "best_loss"
         config = "config1.txt"

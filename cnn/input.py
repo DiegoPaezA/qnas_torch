@@ -186,7 +186,7 @@ class GenericDataLoader:
         
     else:
       if self.params["dataset"] == "turbofan":
-        data = np.load(os.path.join(self.params['data_path'], f"{self.params['dataset']}.npz"))
+        data = np.load(os.path.join(self.params['data_path'], f"{self.params['dataset']}_norm.npz"))
         X_train = data["X_train"]
         y_train = data["y_train"]
   
@@ -274,7 +274,7 @@ class GenericDataLoader:
         raise ValueError(f"Dataset is not available in the path {self.params['data_path']}")
     else:
       if self.params["dataset"] == "turbofan":
-        data = np.load(os.path.join(self.params['data_path'], f"{self.params['dataset']}.npz"))
+        data = np.load(os.path.join(self.params['data_path'], f"{self.params['dataset']}_norm.npz"))
         X_train = data["X_train"]
         y_train = data["y_train"]
         X_test = data["X_test"]

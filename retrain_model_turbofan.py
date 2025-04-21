@@ -117,7 +117,7 @@ if __name__ == '__main__':
     if DEBUG:
         dataset = "turbofan"
         exp_path_base = f"exp_{dataset}"
-        exp = "exp1"
+        exp = "expnorm"
         data_path = f"{dataset}_data"
         fitness_metric = "best_loss"
         config = "config1.txt"
@@ -134,10 +134,10 @@ if __name__ == '__main__':
             "--data_path", data_path,
             "--dataset", dataset,
             "--retrain_folder", "retrain",
-            "--config_code", "F13",
+            "--config_code", "F12",
             "--log_level", log_level,
             "--network_config", network_config,
-            "--max_epochs", "6",
+            "--max_epochs", "25",
             "--batch_size", "32",
             "--eval_batch_size", "16",
             "--num_workers", "4",

@@ -304,7 +304,9 @@ def train(model:torch.nn.Module, criterion:torch.nn.Module, optimizer:torch.opti
 def fitness_calculation(id_num:str, params:Dict[str, Any], 
                         fn_dict:Dict[str, Any], net_list:List[str],
                         train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
-                        return_val,debug:bool=False) -> Dict[str, Union[List[float], float]]:
+                        return_val,
+                        dataset_info:Dict[str, Any]=None,
+                        debug:bool=False) -> Dict[str, Union[List[float], float]]:
     """Train and evaluate a model using evolved hyperparameters.
 
     This function trains and evaluates a convolutional neural network model using the specified
@@ -341,10 +343,10 @@ def fitness_calculation(id_num:str, params:Dict[str, Any],
 
     LOGGER.info(f"Training model {id_num} on device {device} ...")
     # Load data info
-    if params['dataset'].lower() in input.available_datasets:
+    if params['dataset'].lower() in input.available_datasets and dataset_info is not None:
         dataset_info = input.available_datasets[params['dataset'].lower()]
-    else:
-        dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
+    # else:
+    #     dataset_info = load_yaml(os.path.join(params['data_path'], 'data_info.txt'))
     
     params['num_classes'] = dataset_info['num_classes']
     params['task'] = dataset_info['task']

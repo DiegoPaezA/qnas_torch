@@ -3,15 +3,16 @@
 
     - Distribute and Evaluate the population using multiple processes.
 """
-
+import os
 import torch.multiprocessing as mp
 from typing import Dict, Any, List
 import numpy as np
 from cnn import train
-from util import init_log
+from util import init_log, load_yaml
 import torch
 from cnn import input
 import time
+
 
 class EvalPopulation(object):
     """
@@ -125,7 +126,7 @@ class EvalPopulation(object):
         #                      val_loader,
         #                      individual_per_thread,
         #                      gpu_device)
-
+        dataset_info = load_yaml(os.path.join(self.train_params['data_path'], 'data_info.txt'))
         for idx in range(self.train_params['threads']):
             individuals_selected_thread = list(filter(lambda x: x[1]==idx, individual_per_thread))
             gpu_device = self.gpus[idx%len(self.gpus)]
@@ -138,7 +139,8 @@ class EvalPopulation(object):
                                                 train_loader,
                                                 val_loader,
                                                 individuals_selected_thread,
-                                                gpu_device))
+                                                gpu_device,
+                                                dataset_info))
             process.start()
             processes.append(process)
 
@@ -156,7 +158,7 @@ class EvalPopulation(object):
         return evaluations
             
             
-    def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread, gpu_device):
+    def run_individuals(self, generation,  train_params, fn_dict,train_loader, val_loader, individuals_selected_thread, gpu_device, dataset_info = None):
         train_loader, val_loader = self.loader.get_loader(pin_memory_device=gpu_device)
         for individual, selected_thread, decoded_net, decoded_params, return_val in individuals_selected_thread:
             self.train_params['device'] = gpu_device
@@ -166,7 +168,8 @@ class EvalPopulation(object):
                                         decoded_net,
                                         train_loader,
                                         val_loader, 
-                                        return_val)
+                                        return_val,
+                                        dataset_info)
             self.logger.info(f"Calculated fitness of individual {individual} on thread {selected_thread} with "
                             f"Best Metric: {round(return_val[0], 3)}, Params: {round(return_val[1], 2)}M, "
                             f"Inference Time: {round(return_val[2], 3)} uS")

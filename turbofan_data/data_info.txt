@@ -1,14 +1,14 @@
 dataset: turbofan
 mean:
-- 1821.7660829027777
+- 0.011867787649466686
 num_classes: 1
-seed: 1745168305
+seed: 1745254041
 shape:
 - 1
 - 15
 - 15
 std:
-- 2777.6506475168526
+- 0.9173435824507824
 task: regression
 test_records: 100
 train_records: 17307
