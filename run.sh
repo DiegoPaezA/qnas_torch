@@ -1,14 +1,14 @@
 #!/bin/bash
 dataset="cifar10"
-exp_path_base="experiment_${dataset}_acc_20"
+exp_path_base="experiment_${dataset}_acc_17"
 config_file="config_files_cifar"
 fitness_metric="best_accuracy"
 data_path="${dataset}_data"
 log_level="INFO"
-network_config="dense"
+network_config="default"
 dataset_sample_size=10000
 
-configs=("config16.txt")
+configs=("config15.txt")
 exps=("exp1")
 cuda_devices=("0,1")
 
